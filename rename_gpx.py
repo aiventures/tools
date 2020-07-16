@@ -1,6 +1,6 @@
 # rename gpx files according to theit first occurence of track name
 # place this file inside directory with
-import win32ui
+
 import os
 from pathlib import Path
 from image_meta.persistence import Persistence
@@ -21,4 +21,4 @@ for f in fl:
         os.rename(src,trg)
     else:
         print(f"{trg} already exists!")
-win32ui.MessageBox("Renamed gpx files", "End Of Program")
+input("---Finished, To Quit Press Key---")

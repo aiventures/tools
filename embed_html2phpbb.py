@@ -25,7 +25,7 @@ locale.setlocale(locale.LC_ALL, 'de_DE') # use German locale; name might vary wi
 # retrieve snippet from clipboard or from file
 read_from_clipboard = True
 # filename of code snippet 
-snippet = r"C:\Users\"
+snippet = r"C:\Users"
 # Show detailed processing information
 DEBUG = True
 
