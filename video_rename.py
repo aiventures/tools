@@ -53,7 +53,7 @@ def get_video_prefix(s, debug=False):
             if debug:
                 print("search result",search)            
             result[k] = search
-    
+
     prefix = ""
     # map results
     if result:        
