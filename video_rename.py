@@ -10,8 +10,8 @@ def get_video_prefix(s, debug=False):
     """ Based on predefined pattern, get a video prefix (series,episode and total number) """
 
     regex = {"episode":r"[a-zA-Z]+\s*\((\d+)\)",
-             "episode_num":r"\D\s+\((\d+)[_-](\d+)",
-             "series_episode_num":r"(\d+)\s*\([sSeE]{0,1}(\d+)[_-][sSeE]{0,1}(\d+)\)",
+             "episode_num":r"\D\s+\((\d+)[_-\/](\d+)",
+             "series_episode_num":r"(\d+)\s*\([sSeE]{0,1}(\d+)[_-\/][sSeE]{0,1}(\d+)\)",
              "series_episode":r"(\d+)\s*\([sSeE]{0,1}([\d]+)\)",
              "numbers":r"\D*(\d+)"}
 

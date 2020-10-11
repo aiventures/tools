@@ -10,7 +10,11 @@ print(f"work dir {p}")
 fl = Persistence.get_file_list(p,["gpx"])
 for f in fl:
     src = os.path.normpath(f)
-    gpsx_dict = Persistence.read_gpx(gpsx_path=src)
+    try:
+        gpsx_dict = Persistence.read_gpx(gpsx_path=src)
+    except:
+        print(f"ERROR processing file {src}")
+        continue
     trackname = gpsx_dict[list(gpsx_dict.keys())[0]]["track_name"]
     p = Path(f)
     parent = p.parent
