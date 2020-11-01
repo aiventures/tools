@@ -11,8 +11,8 @@ def get_video_prefix(s, debug=False):
 
     regex = {"episode":r"[a-zA-Z]+\s*\((\d+)\)",
              "episode_num":r"\D\s+\((\d+)[_-\/](\d+)",
-             "series_episode_num":r"(\d+)\s*\([sSeE]{0,1}(\d+)[_-\/][sSeE]{0,1}(\d+)\)",
-             "series_episode":r"(\d+)\s*\([sSeE]{0,1}([\d]+)\)",
+             "series_episode_num":r"(\d+)\s*\([sS]{0,1}(\d+)[_-\/][eE]{0,1}(\d+)\)",
+             "series_episode":r"\([sS]{0,1}(\d+)[-_\/][eE]{0,1}(\d+)",
              "numbers":r"\D*(\d+)"}
 
     number_map = {"episode":(lambda s: ['', s[0], '']),
@@ -65,11 +65,11 @@ def get_video_prefix(s, debug=False):
                 prefix += prefix_partial
         prefix += " "
         if debug:
-            print(f"final prefix {prefix}")    
+            print(f"regex pattern found: {k} / final prefix {prefix}")    
 
     return prefix
 
-def rename_video_files(filepath, debug=False, use_parentname=True, rename=False):
+def rename(filepath, debug=False, use_parentname=True, rename=False):
     """ renames video files and adds prefix for series episodes and num of episodes
         Parameters
         filepath: absolute path with video files
