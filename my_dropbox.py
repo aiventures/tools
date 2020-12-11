@@ -19,13 +19,16 @@
 
 #import dropbox
 import sys
+import os
+import shutil
 from datetime import datetime
 import traceback
 import webbrowser
 import win32clipboard
+from dropbox.exceptions import HttpError
 from dropbox import DropboxOAuth2FlowNoRedirect
 from dropbox import Dropbox
-from dropbox.exceptions import AuthError
+from dropbox.exceptions import ApiError
 from requests.exceptions import HTTPError
 from image_meta.persistence import Persistence
 from image_meta.util import Util
@@ -114,6 +117,59 @@ class MyDropbox:
         self.local_file = None
         self.backup_path = None
 
+    def get_remote_metadata(self):
+        """ returns metadata of remote file """
+        md = None
+
+        if self.dbx is None or self.remote_file is None:
+            print(f"ERROR MyDropbox.get_remote_metadata: dbx: {self.dbx},"+
+                  f" remote file {self.remote_file}")
+            return None
+
+        try:
+            md = self.dbx.files_get_metadata(self.remote_file)
+            if self.show_info:
+                print(f"metadata for filepath {self.remote_file} found on Dropbox")
+        except ApiError as ex:
+            if ex.error.is_path() and ex.error.get_path().is_not_found():
+                print(f"EXCEPTION: Filepath {self.remote_file} can not be found on Dropbox")
+            else:
+                print("EXCEPTION MyDropboxget.get_remoteMetadata")
+                traceback.print_exception(*sys.exc_info())
+            return None
+        except Exception:
+            print(" EXCEPTION MyDropboxget.get_remoteMetadata")
+            traceback.print_exception(*sys.exc_info())
+            return None
+
+        return md
+
+    def read_remote_file(self, verbose=False):
+        """ reads remote data and returns iot as bytestring"""
+
+        try:
+            md, response = self.dbx.files_download(self.remote_file)
+            bytestring = response.content
+            if self.show_info:
+                print(f" MyDropbox.read_remote_file, download {self.remote_file},"+
+                      f" {len(bytestring)} bytes, modified on {md.server_modified}")
+            if verbose:
+                print(" --- File Content ---")
+                unicode_text = str(bytestring, 'utf-8')
+                print(str(unicode_text))
+                # unicode_text.splitlines()
+            return bytestring
+        except HttpError as ex:
+            print(" EXCEPTION MyDropbox.read_remote_file,"+
+                  f" reading {self.remote_file} with error {ex}")
+            traceback.print_exception(*sys.exc_info())
+            return None
+        except Exception as ex:
+            print(" EXCEPTION MyDropbox.read_remote_file,"+
+                  f" reading {self.remote_file} with error {ex}")
+            traceback.print_exception(*sys.exc_info())
+            return None
+
     def update_token_info(self):
         """ Update of token info for given dbx instance """
         if not isinstance(self.dbx, Dropbox):
@@ -142,17 +198,12 @@ class MyDropbox:
 
         return access_info
 
-    def get_metadata(self):
-        """
-        Gets metadata of remote file
-        """
-        return None
-
     def get_instance_from_data(self):
         """
             checks whether access data can be used to instanciate dropbox
             will return a Dropbox instance when success, none otherwise
         """
+
         dbx = None
 
         if self.remote_file is None:
@@ -170,26 +221,8 @@ class MyDropbox:
                           oauth2_refresh_token=self.refresh_token,
                           oauth2_access_token_expiration=self.app_token_expiry,
                           app_key=self.app_key, app_secret=self.app_secret)
-        except Exception:
-            print(" EXCEPTION MyDropboxget.get_instance_from_data ")
-            traceback.print_exception(*sys.exc_info())
-            return None
-
-        # check if token is valid
-        try:
-            _ = dbx.files_get_metadata(self.remote_file)
-            if (self.show_info):
-                print(" INFORMATION Dropbox instanciation from saved data, authentication flow not needed\n")
-        except AuthError as ex:
-            if ex.error.is_expired_access_token():
-                print(f" MyDropboxget.get_instance_from_data access token expired,"+
-                      f" using refresh token {self.refresh_token}")
-                if self.refresh_token is not None:
-                    dbx.refresh_access_token()
-            else:
-                print(" EXCEPTION MyDropboxget.get_instance_from_data ")
-                traceback.print_exception(*sys.exc_info())
-                return None
+            if self.show_info:
+                print("CREATED Dropbox from loaded data")
         except Exception:
             print(" EXCEPTION MyDropboxget.get_instance_from_data ")
             traceback.print_exception(*sys.exc_info())
@@ -224,6 +257,7 @@ class MyDropbox:
                 else:
                     s_0 = "Create New Dropbox Instance failed"
                     dbx = None
+
             self.dbx = dbx
         else:
             s_0 = "Get Existing Dropbox instance "
@@ -283,3 +317,62 @@ class MyDropbox:
         except Exception:
             traceback.print_exception(*sys.exc_info())
             return None
+
+# f = open(file_download, 'w+b')
+# #byte_arr = [120, 3, 255, 0, 100]
+# #binary_format = bytearray(byte_arr)
+# f.write(bytestring)
+# f.close(
+
+    # def read_local_file(self):
+    #     """ reads local file, should be utf-8 """
+    #     fp_info = Persistence.get_filepath_info(self.local_file)
+    #     return fp_info
+
+    def upload(self):
+        """ upload file to dropbox """
+        #todo implement upload
+
+        f_info_local = Persistence.get_filepath_info(self.local_file)
+        if not f_info_local["is_file"]:
+            print(f" MyDropbox.upload: Local upload file {self.local_file} is not a file")
+            return False
+
+    def download(self):
+        """ download file from dropbox """
+
+        #todo implement download
+        f_info_local = Persistence.get_filepath_info(self.local_file)
+
+        if f_info_local["is_file"]:
+            print(f" MyDropbox.upload: {self.local_file} is not a file")
+            return False
+
+        # make a backup of local file if set up correctly
+        self.backup_local()
+
+
+    def backup_local(self):
+        """" checks whether a backup file can be done """
+
+        f_info_local = Persistence.get_filepath_info(self.local_file)
+
+        if not (f_info_local["is_file"] and os.path.isdir(self.backup_path)):
+            if self.show_info:
+                print(f" MyDropbox.backup_local, file {self.local_file} "+
+                      f"or backup path {self.backup_path} doesn't exist")
+            return
+
+        path_info = Persistence.get_filepath_info(self.backup_path)
+
+        # datetime for backup
+        dt_s = datetime.now().strftime("_%Y%m%d_%H%M%S")
+        filename_backup = f_info_local["stem"]+dt_s+"."+f_info_local["suffix"]
+        f_target = os.path.join(path_info["filepath"], filename_backup)
+
+        try:
+            shutil.copy(f_info_local["filepath"], f_target)
+            if self.show_info:
+                print(f" MyDropbox.backup_local: {f_target}")
+        except OSError:
+            traceback.print_exception(*sys.exc_info())
