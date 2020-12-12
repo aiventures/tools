@@ -8,6 +8,7 @@ bin-release/
 .settings/
 .vscode/
 __pycache__/
+pylint_msg.txt
 
 # Executables
 *.swf
