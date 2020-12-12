@@ -410,7 +410,7 @@ class MyDropbox:
             f.close()
             return bytestring
         except (OSError, IOError) as ex:
-            print(f" ERROR MyDropbox.downkload: {ex}")
+            print(f" ERROR MyDropbox.download: {ex}")
             traceback.print_exception(*sys.exc_info())
 
     def backup_local(self):
