@@ -1,0 +1,11 @@
+{
+    "app_key": "<your app key>",
+    "app_secret": "<your app secret>",
+    "app_token": "app token will be stored here",
+    "app_token_expiry": "2020-10-10#00:52:15",
+    "refresh_token": "refresh token will be stored here",
+    "remote_file": "/<remote path>/<remote file.txt>",
+    "local_file": "C:/<local path>/<local file.txt>",
+    "backup_path": "C:/<local backup>",
+    "date_access_info": "2020-10-10#21:52:20"
+}

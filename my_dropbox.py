@@ -357,6 +357,10 @@ class MyDropbox:
                 md = self.dbx.files_upload(f.read(), self.remote_file,
                                            mode=dropbox.files.WriteMode.overwrite,
                                            client_modified=f_info_local["changed_on"])
+
+                # make a backup of local file if set up
+                self.backup_local()
+
                 if self.show_info:
                     Util.print_dict_info(MyDropbox.get_metadata_dict(md),
                                          s="MyDropbox.upload file metadata:")
@@ -396,7 +400,8 @@ class MyDropbox:
             Util.print_dict_info(md_dict, s="MyDropbox.download File metadata")
 
         if show_content:
-            print(f"\n --- FILE {md.name} (Server time {md.server_modified}), {md.size} bytes ---\n")
+            print(f"\n --- FILE {md.name} (Server time {md.server_modified}),"+
+                  f" {md.size} bytes ---\n")
             print(unicode_text)
             print(" -----------------------------")
 
@@ -421,7 +426,7 @@ class MyDropbox:
         if ((self.backup_path is None) or
                 (not(f_info_local["is_file"] and os.path.isdir(self.backup_path)))):
             if self.show_info:
-                print(f" MyDropbox.backup_local, file {self.local_file} "+
+                print(f"\n MyDropbox.backup_local, file {self.local_file} "+
                       f"or backup path {self.backup_path} doesn't exist")
             return
 
@@ -435,6 +440,6 @@ class MyDropbox:
         try:
             shutil.copy(f_info_local["filepath"], f_target)
             if self.show_info:
-                print(f" MyDropbox.backup_local: {f_target}")
+                print(f"\n MyDropbox.backup_local: {f_target}")
         except OSError:
             traceback.print_exception(*sys.exc_info())
