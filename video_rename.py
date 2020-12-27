@@ -9,10 +9,17 @@ from image_meta.persistence import Persistence
 def get_video_prefix(s, debug=False):
     """ Based on predefined pattern, get a video prefix (series,episode and total number) """
 
+    # Patterns
+    # episode: _alphanum_(#N)
+    # episode_num: _alphanum_(#E[_-]#N)
+    # series_episode: [sS](#S)_alphanum_[-_](#E)
+    # numbers: _alpha_num
+
+
     regex = {"episode":r"[a-zA-Z]+\s*\((\d+)\)",
-             "episode_num":r"\D\s+\((\d+)[_-\/](\d+)",
-             "series_episode_num":r"(\d+)\s*\([sS]{0,1}(\d+)[_-\/][eE]{0,1}(\d+)\)",
-             "series_episode":r"\([sS]{0,1}(\d+)[-_\/][eE]{0,1}(\d+)",
+             "episode_num":r"\D\s+\((\d+)[_\-\/](\d+)",
+             "series_episode_num":r"(\d+)\s*\([sS]{0,1}(\d+)[_\-\/][eE]{0,1}(\d+)\)",
+             "series_episode":r"\([sS]{0,1}(\d+)[\-_\/][eE]{0,1}(\d+)",
              "numbers":r"\D*(\d+)"}
 
     number_map = {"episode":(lambda s: ['', s[0], '']),
