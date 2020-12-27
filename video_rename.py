@@ -76,7 +76,7 @@ def get_video_prefix(s, debug=False):
 
     return prefix
 
-def rename(filepath, debug=False, use_parentname=True, rename=False):
+def rename_files(filepath, debug=False, use_parentname=True, rename=False):
     """ renames video files and adds prefix for series episodes and num of episodes
         Parameters
         filepath: absolute path with video files
