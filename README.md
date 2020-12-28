@@ -15,6 +15,6 @@ Click on module name to access code
 * [`todo.py`](todo.py) - Basic parsing implementation of the todo.txt specification
 
 ## Worth Noticing
-Look put for the `..sample.py` or `..test.py` files that are showing off the tools' capabilities
+Look out for the `..sample.py` or `..test.py` files that are showing off the tools' capabilities
 
 December 2020, Henrik Fessler (aiventures)
