@@ -5,7 +5,7 @@ from functools import reduce
 from image_meta.util import Util
 from image_meta.persistence import Persistence
 
-class FileDuplicates:
+class DuplicateFiles:
     """ Analyses Filepaths for Duplicate files  """
 
     # File modes
@@ -42,8 +42,8 @@ class FileDuplicates:
         if len(regex_matches) == 1:
             return regex_matches[0]
         elif len(regex_matches) > 1:
-            if (match_mode == FileDuplicates.ANY or
-                    match_mode == FileDuplicates.SINGLE_ANY):
+            if (match_mode == DuplicateFiles.ANY or
+                    match_mode == DuplicateFiles.SINGLE_ANY):
                 return reduce(lambda a, b: (a or b), regex_matches)
             else:
                 return reduce(lambda a, b: (a and b), regex_matches)
@@ -70,7 +70,7 @@ class FileDuplicates:
                       {"regex_list":self.regex_exclude_list, "result":True}]
 
         for regex_dict in matchlists:
-            matches = FileDuplicates.matches_regex_list(s,
+            matches = DuplicateFiles.matches_regex_list(s,
                         regex_list=regex_dict["regex_list"],
                         match_mode=self.search_mode,
                         show_info=self.show_info)
@@ -99,8 +99,8 @@ class FileDuplicates:
                     drive, subdrive_path = os.path.splitdrive(subpath)
                     abs_filepath = os.path.join(os.path.abspath(drive), subdrive_path, file)
 
-                    if (self.search_mode == FileDuplicates.SINGLE_ANY or
-                            self.search_mode == FileDuplicates.SINGLE_ALL):
+                    if (self.search_mode == DuplicateFiles.SINGLE_ANY or
+                            self.search_mode == DuplicateFiles.SINGLE_ALL):
 
                         skip = self.__process_matchlists__(abs_filepath)
                         if skip:
@@ -116,8 +116,8 @@ class FileDuplicates:
                         print("  ADDED", abs_filepath)
 
         # process if all duplicates need to be analysed jointly
-        if (self.search_mode == FileDuplicates.SINGLE_ANY or
-                self.search_mode == FileDuplicates.SINGLE_ALL):
+        if (self.search_mode == DuplicateFiles.SINGLE_ANY or
+                self.search_mode == DuplicateFiles.SINGLE_ALL):
             return filelist
 
         for file_name, file_info in filelist.items():
@@ -141,7 +141,7 @@ class FileDuplicates:
                 remove_file = True
             elif len(remove_filepaths) > 1:
                 # depending on search mode remove entries from list
-                if self.search_mode == FileDuplicates.ANY:
+                if self.search_mode == DuplicateFiles.ANY:
                     remove_file = reduce(lambda a, b: (a or b), remove_filepaths)
                 else:
                     remove_file = reduce(lambda a, b: (a and b), remove_filepaths)
@@ -179,15 +179,15 @@ class FileDuplicates:
             num_locations = len(file_locations)
 
             # filter mode (0:all,1:only singles,2:only with many occurences)
-            if display_mode == FileDuplicates.SHOW_SINGLES and num_locations > 1:
+            if display_mode == DuplicateFiles.SHOW_SINGLES and num_locations > 1:
                 continue
-            elif display_mode == FileDuplicates.SHOW_DUPLICATES and num_locations == 1:
+            elif display_mode == DuplicateFiles.SHOW_DUPLICATES and num_locations == 1:
                 continue
 
             print(f"\n-- [{num_locations}]", file_ref)
 
             # only show duplicates or single or all
-            folderpath_infos = map(lambda fl: (FileDuplicates.__map_fileinfo__(file_infos[fl])),
+            folderpath_infos = map(lambda fl: (DuplicateFiles.__map_fileinfo__(file_infos[fl])),
                                    file_locations)
             folderpath_infos = list(folderpath_infos)
             [print(f) for f in folderpath_infos]
