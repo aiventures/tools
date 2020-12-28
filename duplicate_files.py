@@ -1,4 +1,4 @@
-""" Analyses / DisplaysFilepaths for Duplicate files  """
+""" Analyzes / DisplaysFilepaths for Duplicate files  """
 import os
 import re
 from functools import reduce
@@ -6,7 +6,7 @@ from image_meta.util import Util
 from image_meta.persistence import Persistence
 
 class DuplicateFiles:
-    """ Analyses Filepaths for Duplicate files  """
+    """ Analyzes Filepaths for Duplicate files  """
 
     # File modes
     ANY = "OR"

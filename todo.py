@@ -1,4 +1,4 @@
-""" Basic implementation of the todo.txt specification
+""" Basic parsing implementation of the todo.txt specification
         https://github.com/todotxt/todo.txt
         http://todotxt.org/
         will transform lines of strings in todo format into json and vice versa
