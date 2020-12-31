@@ -51,7 +51,7 @@ class DuplicateFiles:
             return False
 
     @staticmethod
-    def __map_fileinfo__(file_info: dict):
+    def __pathinfo_as_string__(file_info: dict):
         """ transforms file info information for a single file into a display string """
         path = Util.trunc_string(file_info['parent'], start=20, end=15, s_length=37)
         changed = file_info['changed_on']
@@ -187,7 +187,7 @@ class DuplicateFiles:
             print(f"\n-- [{num_locations}]", file_ref)
 
             # only show duplicates or single or all
-            folderpath_infos = map(lambda fl: (DuplicateFiles.__map_fileinfo__(file_infos[fl])),
+            folderpath_infos = map(lambda fl: (DuplicateFiles.__pathinfo_as_string__(file_infos[fl])),
                                    file_locations)
             folderpath_infos = list(folderpath_infos)
             [print(f) for f in folderpath_infos]
