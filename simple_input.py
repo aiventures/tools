@@ -25,4 +25,8 @@ if v is None:
     else:
         v = input("Enter value: ")
 
+# strip any apostrophes
+if isinstance(v,str):
+    v.replace('"','') 
+
 print(f"-- simple_input.py: Input Value set to <{v}> ---\n")
