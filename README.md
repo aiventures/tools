@@ -5,6 +5,7 @@ Small collection of Python tools helping me to tackle some often faced tasks ...
 
 ## List of Modules
 Click on module name to access code
+* [`compound_interest.py`](compound_interest.py) - Compound interest calculations, useful for insurances & savings ... comes along with a [Jupyter Notebook](compound_interest.ipynb) and [sample data](compound_interest_sample.csv)
 * [`copy_meta_files.py`](copy_meta_files.py) - util program to copy files from a source director to child directories (only 1st level), used for copying of image metadata
 * [`duplicate_files.py`](duplicate_files.py) - Analyzes / DisplaysFilepaths for Duplicate files
 * [`embed_html2phpbb.py`](embed_html2phpbb.py) - utility to transform embed html code into phpbb code
