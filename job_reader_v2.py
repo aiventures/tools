@@ -22,6 +22,9 @@ import datetime
 from functools import reduce
 import hashlib
 
+city_list=["Stuttgart","Karlsruhe","Mannheim","Heidelberg","Heilbronn","Fußgönheim","Neckarsulm","Pforzheim",
+           "Renningen","Ludwigshafen am Rhein","Speyer","Walldorf","Sankt Leon-Rot","Frankfurt am Main"]
+
 def get_hash_version(lines):
     """ calculates a hash string of selected dict fields """
     hash_fields = ["job","company","location"]
@@ -102,13 +105,17 @@ def get_regex_dict():
     # regex specification for salary range (line ends with € symbol)
     # line is of pattern "(#)##).000 - ((#)##).000 €"  #: Digit (#) optional
     # extract the min and max numbers before the period
-    regex_salary = {r"salary":r"(\d+)\.\d{3}[^0-9]*(\d+)\.\d{3}.*€$"}
+    regex_salary = {r"salary":r"(\d+)\.\d{3}[^0-9]*(\d+)\.\d{3}.*"}
 
     # --- COMPANY RATING ---
-    # regex specification for rating 
+    # regex specification for rating
     # line is of pattern "? ? ? ? ?#,##"  #: Digit
     # extract the numbers andf convert it to float
     regex_rating = {r"rating":r"(\d,\d{2})$"}
+
+    # different rating regex
+    # 3,74 3.5 von 5 Sternen
+    regex_rating2 =  {r"rating2":r"^(\d,\d{2}).*Sternen$"}
 
     # --- JOB DESCRIPTION ---
     # regex specification for job position extraction
@@ -119,19 +126,21 @@ def get_regex_dict():
     # --- COMPANY NAME AND LOCATION ---
     # regex specification for company extraction and location
     # line is of pattern "<company> [GmbH|SE|AG|Co], <location>
-    # extract (<company> [...]) and location 
+    # extract (<company> [...]) and location
     regex_company = {r"company":r"(.*GmbH.*|.*AG|.*NN|.*SE|.*Co|.*KG|.*Deutschland),(.*)"} 
+    regex_company_only = {r"company_only":r"(.*GmbH.*|.*AG|.*NN|.*SE|.*Co|.*KG|.*Deutschland)"} 
 
     # --- COMPANY NAME AND LOCATION ---
     # regex specification for companies with known locations
     # line is of pattern "<company> [GmbH|SE|AG|Co], <location>
-    # extract (<company> [...]) and location 
+    # extract (<company> [...]) and location
     # location string
-    s_locations = r"(.*), (A|B|C)"
-
+    s_locations = r"(.*), (" +"|".join(city_list)+")"
     regex_company_loc = {r"company_loc":s_locations}
 
-    return {**regex_salary, **regex_rating, **regex_job, **regex_company, **regex_company_loc}
+
+    return {**regex_salary, **regex_rating, **regex_rating2, **regex_job, 
+            **regex_company_only, **regex_company, **regex_company_loc}
 
 def get_new_job_dict():
     """returns empty result dictionary, used as data template"""    
@@ -160,6 +169,11 @@ def get_job_list(job_chunks,debug=False):
             if ((contains(job_chunk.lower(),job_titles)) and (not job_dict["job"])):
                 job_dict["job"] = job_chunk
                 continue
+            
+            # check for location
+            if job_chunk in city_list:
+                job_dict["location"] = job_chunk
+                continue
 
             # check for other segments
             for descriptor in descriptors:
@@ -171,6 +185,8 @@ def get_job_list(job_chunks,debug=False):
                         print(f"descriptor: {descriptor}, regex: {regex}, result: {search_result}")                         
                     if (( descriptor == "job") and (not job_dict["job"])):
                         job_dict[descriptor] = search_result[0].strip()
+                    elif descriptor == "company_only":
+                        job_dict["company"] = search_result[0].strip()
                     elif descriptor == "company":
                         job_dict[descriptor] = search_result[0][0].strip()
                         job_dict["location"] = search_result[0][1].strip()               
@@ -179,13 +195,15 @@ def get_job_list(job_chunks,debug=False):
                         job_dict["location"] = search_result[0][1].strip()                             
                     elif descriptor == "rating":                
                         job_dict[descriptor] = float(search_result[0].replace(',','.'))              
+                    elif descriptor == "rating2":                
+                        job_dict["rating"] = float(search_result[0].replace(',','.'))                            
                     elif descriptor == "salary":
                         job_dict["salary_min"] = int(search_result[0][0])*1000
                         job_dict["salary_max"] = int(search_result[0][1])*1000        
         job_list.append(job_dict)
     return job_list    
 
-def read_jobs_list(filepath,debug=False,erroneous=None,hash=False):
+def read_jobs_list(filepath,debug=False,erroneous=None,hashcells=False):
     """reads job descriptions from textfile and transforms it to data dictionary
        for detailed specs check method get_regex_dict 
        erroneous: None (No effect), True (only erroneous items)
@@ -196,7 +214,7 @@ def read_jobs_list(filepath,debug=False,erroneous=None,hash=False):
     job_chunks_list = read_file_chunks(filepath)
     job_list = get_job_list(job_chunks_list,debug)
 
-    if hash:
+    if hashcells:
         job_list = get_hash_version(job_list)
 
     if erroneous is None:

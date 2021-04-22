@@ -22,7 +22,7 @@ def get_health_tables_from_file(filepath):
     # only get relevant columns
     relevant_colums = ['Datum', 'Uhrzeit', 'Sys.', 'Dia.', 
                        'Puls',"MAD", 'Gewicht', 'BMI', 'Body fat', 
-                       'Wasseranteil', 'Muskelanteil','Wert']
+                       'Wasseranteil', 'Muskelanteil', 'Wert']
 
     lines = read_file(f)
     health_tables = {"BLUTDRUCK":[],"GEWICHT":[],"BLUTZUCKER":[]}
@@ -41,7 +41,9 @@ def get_health_tables_from_file(filepath):
             print(f"Columns Titles: {column_titles}\n")
             continue
 
-        cols = line.split(";")
+        line_strip = line.replace('"', "")
+        cols = line_strip.split(";")
+
 
         if cols[0] in health_indicators:
             health_table = health_tables[cols[0]]
@@ -99,7 +101,7 @@ def get_health_df(filepath):
     df3 = df2.apply(lambda col: col/100 if col.name in percentage_list else col)
 
     # build the output df in correct order
-    output_map = {"G [KG]":"Gewicht","BMI [kg/m2]":"BMI","FETT [%]":"Body fat",
+    output_map = {"Z [mg/dl]":"Wert","G [KG]":"Gewicht","BMI [kg/m2]":"BMI","FETT [%]":"Body fat",
                   "WASSER [%]":"Wasseranteil","MUSKEL [%]":"Muskelanteil","HzSYS":"Sys.",
                   "HzDia":"Dia.","HzPuls":"Puls","HzMAD":"MAD"}
     df4 = df3[[]]
