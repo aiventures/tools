@@ -88,9 +88,10 @@ def read_file_chunks(filepath, debug=False):
                         if len(chunk) > 0:
                             chunks.append(chunk_dict)
                         chunk = [s]
-                    # append data to new chunk
+                    # append data to new chunk / ignore duplicates
                     else:
-                        chunk.append(s)
+                        if s not in chunk:
+                            chunk.append(s)
 
             last_line = s
 
