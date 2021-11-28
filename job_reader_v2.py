@@ -23,7 +23,7 @@ from functools import reduce
 import hashlib
 
 city_list=["Stuttgart","Karlsruhe","Mannheim","Heidelberg","Heilbronn","Fußgönheim","Neckarsulm","Pforzheim",
-           "Renningen","Ludwigshafen am Rhein","Speyer","Walldorf","Sankt Leon-Rot","Frankfurt am Main"]
+           "Renningen","Ludwigshafen am Rhein","Speyer","Walldorf","Sankt Leon-Rot","Frankfurt am Main","citynn"]
 
 def get_hash_version(lines):
     """ calculates a hash string of selected dict fields """
@@ -160,12 +160,14 @@ def get_job_list(job_chunks,debug=False):
     job_titles = get_jobtitles()
 
     for job_chunk_dict in job_chunks:
-        print(job_chunk_dict)
         job_dict = job_dict_empty.copy()
         job_dict["date"] = job_chunk_dict["date"]
         job_dict["line"] = job_chunk_dict["line"]
-        job_chunks = job_chunk_dict["chunk"]
+        job_chunks = job_chunk_dict.get("chunk",None)
+        if job_chunks is None:
+            continue
         for job_chunk in job_chunks:
+
             # check for job title 
             if ((contains(job_chunk.lower(),job_titles)) and (not job_dict["job"])):
                 job_dict["job"] = job_chunk
@@ -201,7 +203,9 @@ def get_job_list(job_chunks,debug=False):
                     elif descriptor == "salary":
                         job_dict["salary_min"] = int(search_result[0][0])*1000
                         job_dict["salary_max"] = int(search_result[0][1])*1000        
-        job_list.append(job_dict)
+
+        if job_dict.get("job",None) is not None:
+            job_list.append(job_dict)
     return job_list    
 
 def read_jobs_list(filepath,debug=False,erroneous=None,hashcells=False):
@@ -226,6 +230,7 @@ def read_jobs_list(filepath,debug=False,erroneous=None,hashcells=False):
         error_list = list(map(lambda a:entry[a] is None,attrib_list))
         # at least one error needs to occur
         has_error = reduce(lambda e1,e2: e1 or e2,error_list)
+
         # return entry
         if has_error and erroneous:
             filtered_list.append(entry)
