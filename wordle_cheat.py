@@ -41,7 +41,7 @@ def get_regex(variable_letters:str,fixed_letters:str=None):
 
 # file containing five letter words 
 # check out GitHub Repo for sources
-f = r"C:\<file to>Users\Henrik\Desktop\FiveLetterWords.txt"
+f = r"C:\<file to>\FiveLetterWords.txt"
 
 words = read_file(f)
 fixed_letters = "***l*"
