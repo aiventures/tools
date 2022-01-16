@@ -21,6 +21,13 @@ def get_fixed_letter_regex(fixed_letters):
     fixed_letters_regex_s = fixed_letters.replace("*",ANY_LETTER)
     return "("+fixed_letters_regex_s+")"
 
+def get_misplaced_letter_regex(misplaced_letter_list):
+    ANY_LETTER = r"\w"
+    misplaced_letters_regex_s = [s.replace("*",ANY_LETTER) for s in misplaced_letter_list]
+    # [get_misplaced_letter_regex(pattern) for pattern in misplaced_letter_pattern]
+    misplaced_letters_regex_s = [("(?!"+s+")") for s in misplaced_letters_regex_s]
+    return "".join(misplaced_letters_regex_s)
+
 def get_variable_letter_regex(variable_letters):
     REGEX_MATCH_CHAR =r"(?=.*X)"
     variable_letters_regex_s = "".join([REGEX_MATCH_CHAR.replace("X",letter) for letter in variable_letters])
@@ -31,35 +38,45 @@ def get_missing_letter_regex(missing_letters):
     missing_letters_regex_s = "".join([REGEX_MATCH_CHAR.replace("X",letter) for letter in missing_letters])
     return missing_letters_regex_s
 
-def get_regex(variable_letters:str,fixed_letters:str=None):
+def get_variable_letters(misplaced_letter_list):
+    variable_letters = ""
+    letters = "".join(misplaced_letter_list).replace("*","")
+    for letter in letters:
+        if not letter in variable_letters:
+            variable_letters += letter
+    return variable_letters
+
+def get_regex(misplaced_letter_list=[],fixed_letters="",missing_letters=""):
     if len(fixed_letters) == 0:
         fixed_letters = "*****"
-    
+
     regex_fix_s = get_fixed_letter_regex(fixed_letters)
-        
+
+    variable_letters = get_variable_letters(misplaced_letter_list)
+
     if len(variable_letters) > 0:
         regex_var_s = get_variable_letter_regex(variable_letters)
     else:
         regex_var_s = ""
-        
+
     if len(missing_letters) > 0:
         regex_missing_s = get_missing_letter_regex(missing_letters)
     else:
-        regex_missing_s = ""        
-    
-    return re.compile(regex_var_s + regex_missing_s + regex_fix_s)
+        regex_missing_s = ""
 
-# file containing five letter words 
-# check out GitHub Repo for sources
-f = r"C:\<file to>\FiveLetterWords.txt"
+    regex_misplaced_letters_s = get_misplaced_letter_regex(misplaced_letter_list)
 
+    return re.compile(regex_var_s + regex_missing_s + regex_misplaced_letters_s + regex_fix_s)
+
+f = r"<Path To>\FiveLetterWords.txt"
 words = read_file(f)
-# list of fixed position lettes * is wildcard
-fixed_letters = "***l*"
-# list of variable letters
-variable_letters = "da"
-# list of non contained characters
-missing_letters = "i"
-regex = get_regex(variable_letters,fixed_letters)
-# output words that match fixed and variables 
-print([word for word in words if regex.match(word)])
+# patterns need to be 5 characters with '*' serving as place holder
+# pattern string containing letter in correct order
+fixed_letters = "*o***"
+# pattern strings containing the correct letters in wrong order
+misplaced_letter_patterns = ["****s","**as*"]
+# letters not contained in final word
+missing_letters = "enibt"
+regex = get_regex(misplaced_letter_patterns,fixed_letters,missing_letters)
+print("REGEX:",regex.pattern,"\n")
+print([word for word in words if regex.match(word)])    
