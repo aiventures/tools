@@ -1,5 +1,8 @@
 """ wordle cheat file ... forgive me, I am a non native speaker """
 
+import traceback
+import re
+
 def read_file(f:str)->list:
     """ reading UTF8 txt File """
     lines = []
@@ -45,4 +48,4 @@ fixed_letters = "***l*"
 variable_letters = "da"
 regex = get_regex(variable_letters,fixed_letters)
 # output words that match fixed and variables 
-[word for word in words if regex.match(word)]
+print([word for word in words if regex.match(word)])
