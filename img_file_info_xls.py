@@ -21,7 +21,6 @@ EXIF_FIELDS=["Software","Copyright","Make","Model","LensModel",
                  "ExifImageWidth","ImageDescription"]
 
 SOFTWARE=["DxO"]
-
 TYPE_RAW=["arw","dng","insp","dop"]
 TYPE_META=["geo","tpl"]
 TYPE_PROCESSED=["jpg","jpeg"]
@@ -45,7 +44,9 @@ def read_json(filepath:str):
 
     return data
 
-def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,include_entropy=False,debug=False,include_app=False):
+def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,
+             include_entropy=False,debug=False,include_app=False):
+    """ reads exif data from image file """             
     out_dict={}
     try:
         im = Image.open(f)
@@ -76,14 +77,14 @@ def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,include_en
         if not exif_dict.get(exif_field,None):
             continue
         value = exif_dict[exif_field]["value"]
-        if exif_field == "GPSInfo":
+        if exif_field == "GPSInfo":      
             # check if there are valid values
-            check_value =(value[2][0]).denominator
-            if check_value == 0:
+            check_value =(value[2][0])
+            if (check_value==0) or (check_value.denominator==0):
                 continue             
             lat=str(round(float(value[2][0]+value[2][1]/60++value[2][2]/3600),4))
             lon=str(round(float(value[4][0]+value[4][1]/60++value[4][2]/3600),4))        
-            value= "https://www.openstreetmap.org/#map=16/"+lat+"/"+lon    
+            value= "https://www.openstreetmap.org/#map=16/"+lat+"/"+lon
             out_dict["url_gps"]=value
         elif exif_field == "ImageDescription":
             out_dict["ImageDescription"]=value.encode('latin-1').decode('utf-8')
@@ -112,7 +113,6 @@ def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,include_en
             if s.lower() in edit_software.lower():            
                 out_dict["edited"] = True 
     
-    
     #print([(tag_id,TAGS.get(tag_id, tag_id)) for tag_id,TAGS.get(tag_id, tag_id) in exifdata])
     
     #return out_dict
@@ -121,6 +121,7 @@ def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,include_en
 def get_subpath_info_dict(fp:str,type_raw=TYPE_RAW,type_meta=TYPE_META,
                         type_processed=TYPE_PROCESSED,type_cleanup=TYPE_CLEANUP,
                         debug=False):
+    """ reads file information in a given folder path """
     print(f"*** Check Image Files in {fp} ***")    
     p_root=Path(fp)
     subpath_dict={}
@@ -211,4 +212,6 @@ def save_subpath_info_dict(subpath_info_dict,fp_json=None,fp_xls=None):
     # save as xls
     if not fp_xls is None:
         df=pd.DataFrame.from_dict(subpath_info_dict,orient='index')
-        df.to_excel(fp_xls)    
+        df.to_excel(fp_xls) 
+
+
