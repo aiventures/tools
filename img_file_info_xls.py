@@ -26,11 +26,11 @@ SOFTWARE=["DxO"]
 
 # FILETYPES
 TYPE_RAW=["arw","dng","insp"]
-TYPE_META=["geo","tpl","dop"]
+TYPE_META=["geo","tpl","dop","meta"]
 TYPE_JPG=["jpg","jpeg"]
 TYPE_EXIF_FILE_TYPES=TYPE_JPG
 TYPE_EXIF_FILE_TYPES.append("insp")
-TYPE_CLEANUP=["tif"]
+TYPE_CLEANUP=["tif","jpg_original"]
 TYPE_CLEANUP.extend(TYPE_RAW)
 TYPE_CLEANUP.extend(TYPE_META)
 
@@ -39,7 +39,7 @@ FILETYPE_CLASSES_DICT={"TYPE_RAW":TYPE_RAW,
                        "TYPE_JPG":TYPE_JPG,
                        "TYPE_CLEANUP":TYPE_CLEANUP}
 
-DO_NOT_PROCESS_FILES=["metadata.tpl","metadata_exif"]
+DO_NOT_PROCESS_FILES=["metadata.tpl","metadata_exif.tpl","default.geo"]
 IGNORE_FOLDERS=["insp","post"]
 
 # YYYYMMDD _  HHMMSS _ 00/10 _ NUM(3DIGITS)
@@ -50,6 +50,9 @@ REGEX_METADATA_FILES=r"(metadata.tpl|metadata_exif.tpl)"
 REGEX_RULE_DICT={"REGEX_INSTAONEX":REGEX_INSTAONEX,
                  "REGEX_ORIGINAL_NAME":REGEX_ORIGINAL_NAME,
                  "REGEX_METADATA_FILES":REGEX_METADATA_FILES}
+
+# dataframe columns that list number of unnamed filenames
+UNNAMED_FILE_COLUMNS=["REGEX_ORIGINAL_NAME","REGEX_INSTAONEX"]
 
 
 def read_json(filepath:str):
@@ -130,7 +133,7 @@ def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,
         else:
             out_dict["has_description"] = True
     else:
-        out_dict["has_metadata"] = False
+        out_dict["has_description"] = False
 
     # check whether it was worked upon with an editing software
     edit_software=out_dict.get("Software",None)
@@ -140,13 +143,19 @@ def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,
             if s.lower() in edit_software.lower():
                 out_dict["edited"] = True
 
+    # image considered having metadata 
+    if out_dict["has_description"]  & out_dict["has_gps"]:
+        out_dict["has_metadata"] = True
+    else:
+        out_dict["has_metadata"] = False
+
     #print([(tag_id,TAGS.get(tag_id, tag_id)) for tag_id,TAGS.get(tag_id, tag_id) in exifdata])
 
     #return out_dict
     return out_dict
 
 def get_subpath_info_dict(fp:str,type_raw=TYPE_RAW,type_meta=TYPE_META,
-                        TYPE_JPG=TYPE_JPG,type_cleanup=TYPE_CLEANUP,
+                        type_jpg=TYPE_JPG,type_cleanup=TYPE_CLEANUP,
                         debug=False):
     """ reads file information in a given folder path """
     print(f"*** Check Image Files in {fp} ***")
@@ -182,7 +191,7 @@ def get_subpath_info_dict(fp:str,type_raw=TYPE_RAW,type_meta=TYPE_META,
 
             # check for a single exported file whether it already contains metadata
             needs_jpg_export=subpath_info.get("needs_jpg_export",True)
-            if suffix.lower() in TYPE_JPG:
+            if suffix.lower() in type_jpg:
                 needs_jpg_export = False
                 # check file for first occurence
                 if not processed_file_checked:
@@ -199,7 +208,6 @@ def get_subpath_info_dict(fp:str,type_raw=TYPE_RAW,type_meta=TYPE_META,
                     subpath_info["has_description"]=file_exif.get("has_description",None)
                     subpath_info["edited"]=file_exif.get("edited",None)
                 processed_file_checked=True
-
             subpath_info["needs_jpg_export"]=needs_jpg_export
 
             contains_raw=subpath_info.get("contains_raw",False)
@@ -436,3 +444,71 @@ def rename_original_img_files(img_info_df:pd.DataFrame,file_dict:dict,
                     except (FileExistsError,FileNotFoundError) as e:
                         print(f"EXCEPTION: {repr(e)} for file {p_new}")
     return num_renamed
+
+def delete_collateral_image_files(fp:str,exif_file_types=TYPE_JPG,verbose=False,
+                                 max_level=1,delete=True,prompt=True,
+                                 do_not_process_files=DO_NOT_PROCESS_FILES,
+                                 cleanup_filetypes=TYPE_CLEANUP,
+                                 unnamed_file_columns=UNNAMED_FILE_COLUMNS):
+    
+    file_deletion_list=[] 
+    # get the file dictionary 
+    file_dict=get_file_dict(fp,exif_file_types=exif_file_types)
+    filedict_df=get_filepath_stat_df(file_dict)
+    print(f"######## DELETING IN {fp}")
+    if verbose: print(f"#FOLDERS (TOTAL)                       : {len(filedict_df)}")
+    
+    # only get folders that contain JPG and a given folder level (do not consider files in subfolder)
+    filedict_df=filedict_df[(filedict_df["TYPE_JPG"]==True)&(filedict_df["level"]<=max_level)]
+    num_jpg_only=len(filedict_df)
+    filedict_df=filedict_df[filedict_df["NUM_HAS_METADATA"]>0]
+    num_metadata=len(filedict_df)
+    columns=filedict_df.columns
+    
+    unnamed_file_columns=[c for c in unnamed_file_columns if c in columns]
+    
+    # sum columns that count not renamed files
+    filedict_df["SUM_NOT_RENAMED"]=filedict_df[unnamed_file_columns].sum(axis=1)
+    filedict_df=filedict_df[filedict_df["SUM_NOT_RENAMED"]==0]    
+    if verbose:
+        print(f"#FOLDERS (JPEG only, folder level < {max_level}) : {num_jpg_only}")
+        print(f"#FOLDERS (FILES WITH METADATA)         : {num_metadata}")
+        print(f"#FOLDERS (FILES THAT WERE RENAMED)     : {len(filedict_df)}")
+
+    # list of filepaths = key list
+    p_list=list(filedict_df.index)
+    num_delete=0
+    for p in p_list:
+        num_files_for_delete=0
+        num_files_total=0
+
+        print(f"\n--- FOLDER: {p} ---")
+        files=file_dict[p].get("files",[])
+        files=[Path(os.path.join(p,f)) for f in files]
+        files=sorted(files)
+        num_files_total=len(files)
+
+        for f in files:
+            f_name=f.stem+f.suffix
+            # ignore file list
+            if (f_name) in do_not_process_files:
+                continue
+            f_suffix=f.suffix[1:].lower()
+            if not (f_suffix in cleanup_filetypes):
+                continue
+            num_files_for_delete+=1
+            if verbose: print(f"    * {f_name}")
+            file_deletion_list.append(str(f))
+
+        print(f"    Files to delete: {num_files_for_delete}/{num_files_total}")        
+        num_delete+=num_files_for_delete
+    print(f"\n##  FILES TO DELETE: {num_delete} ##")
+        
+    if delete:
+        if (num_delete > 0) & prompt:        
+            if input(f"Delete (y)?") == 'y':
+                for f in file_deletion_list:
+                    if os.path.isfile(f):
+                        os.remove(f)                       
+
+    return file_deletion_list    
