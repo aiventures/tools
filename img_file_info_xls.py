@@ -6,6 +6,7 @@
 
 import os
 import re
+import shutil
 from datetime import date
 from pathlib import Path
 from image_meta.persistence import Persistence
@@ -22,13 +23,16 @@ EXIF_FIELDS=["Software","Copyright","Make","Model","LensModel",
                  "DateTime","DateTimeOriginal","ExifImageHeight",
                  "ExifImageWidth","ImageDescription"]
 
-SOFTWARE=["DxO"]
+SOFTWARE_DXO="DxO"
+SOFTWARE_INSTA="Insta360 one x2"
+SOFTWARE=[SOFTWARE_DXO,SOFTWARE_INSTA]
 
 # FILETYPES
 TYPE_RAW=["arw","dng","insp"]
 TYPE_META=["geo","tpl","dop","meta"]
 TYPE_JPG=["jpg","jpeg"]
-TYPE_EXIF_FILE_TYPES=TYPE_JPG
+TYPE_PANO=["insp"]
+TYPE_EXIF_FILE_TYPES=TYPE_JPG.copy()
 TYPE_EXIF_FILE_TYPES.append("insp")
 TYPE_CLEANUP=["tif","jpg_original"]
 TYPE_CLEANUP.extend(TYPE_RAW)
@@ -511,4 +515,192 @@ def delete_collateral_image_files(fp:str,exif_file_types=TYPE_JPG,verbose=False,
                     if os.path.isfile(f):
                         os.remove(f)                       
 
-    return file_deletion_list    
+    return file_deletion_list
+
+def delete_subfolders(fp_root:str,verbose=False,delete_folder_list=["metadata"],
+                      prompt=True,delete=True):
+    """ Delete Subfolders that contain delete_folder_list substring """
+    
+    print(f"Deleting Subfolders {delete_folder_list} in path {fp_root}")    
+    delete_folders=[]
+    file_dict=get_file_dict(fp_root)
+    for fp,fp_data in file_dict.items():
+        p=Path(fp)
+        if not os.path.isdir(p):
+            continue
+        stem=p.stem
+        # check if folder is in delete folder list
+        #print(stem)
+        #print(to_delete)
+        to_be_deleted=any([(del_fld in stem) for del_fld in delete_folder_list])    
+        if not to_be_deleted:
+            continue
+
+        delete_folders.append(p)
+        files=fp_data.get("files",[])
+        filetypes=[]
+        print(f"\n--- FOLDER {fp} ({len(files)} files ) ---")
+
+        for f in files:
+            if verbose: print(f"    * {f}")
+            filetype=Path(f).suffix
+            if not filetype in filetypes:
+                filetypes.append(filetype)
+        print(f"    FILETYPES: {filetypes} --")
+
+    if len(delete_folders)>0 and delete:    
+        num_del=0
+        if prompt:
+            answer=input("\nDELETE (y) ? ")
+        else:
+            answer="y"
+        if answer=="y":
+            for p_del in delete_folders:
+                shutil.rmtree(p_del)
+                num_del+=1
+        print(f"\ndeleted {num_del} folders")
+    if not delete_folders:
+        print(f"NOTHING FOUND")
+
+    return delete_folders
+
+def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
+                                max_level=1,
+                                verbose=True,save=True,
+                                prompt=True,software=SOFTWARE_INSTA,
+                                pano_filetypes=TYPE_PANO,
+                                jpg_filetypes=TYPE_JPG):
+
+    """ uses exiftool (needs to be in commandline path) to copy metadata """
+    all_exiftool_cmds=[]
+
+    # capture datetime and index of pano file name
+    REGEX_PANO=r"(\d{8}_\d{6}_\d{2}_\d{3})"
+
+    def add_pano_fileinfo(f,d):
+        regex=re.findall(REGEX_PANO,f)
+        if (len(regex)==1):
+            d[regex[0]]={"panofile":f}
+        return None
+
+    exiftool_which=shutil.which(exiftool)
+    if not exiftool_which:
+        print(f"Exiftool {exiftool} not found, check path")    
+        return []
+    else:
+        print(f"Copy Metadata Using EXIFTOOL {exiftool_which}")
+        print(f"Root Path {fp_root}, max folder level {max_level}")
+        print(f"Pano Filetypes {pano_filetypes}, Image Filetypes {jpg_filetypes}")
+
+    file_dict=get_file_dict(fp_root)
+
+    old_fp=os.getcwd()
+
+    fp_img_dict={}
+
+    for fp,file_info in file_dict.items():
+
+        if file_info.get("level",0) > max_level:
+            continue
+
+        file_types=file_info.get("file_types",{})
+
+        contains_pano_files=any([(pano_file_type in file_types) for pano_file_type in pano_filetypes])
+        if not contains_pano_files:
+            continue
+
+        print(f"\n--  FOLDER {fp}--")
+
+        file_list=file_info.get("files",[])
+        pano_file_dict={}
+        pano_files=[f for f in file_list if (Path(f).suffix[1:] in pano_filetypes)]
+
+        # add to pano filedict
+        [add_pano_fileinfo(f,pano_file_dict) for f in pano_files]    
+        img_files=[f for f in file_list if (Path(f).suffix[1:] in jpg_filetypes)]
+
+        # get a dictionary containing the list of files
+        for img_file in img_files:
+            img_key=re.findall(REGEX_PANO,img_file)
+            if not len(img_key)==1:
+                continue
+
+            pano_dict=pano_file_dict.get(img_key[0],None)        
+            if not pano_dict:
+                continue        
+
+            # do not write metadata for image file having same name as 
+            # pano file (its a direct export cxontianing metadata already)
+            if Path(pano_dict.get("panofile","")).stem==Path(img_file).stem:
+                continue
+
+            image_list=pano_dict.get("image_list",[])
+            image_list.append('"'+img_file+'"')
+            pano_dict["image_list"]=image_list
+
+        file_process_list=list(pano_file_dict.values())        
+        for f_dict in file_process_list:
+            image_list=f_dict.get('image_list',[])
+            print(f"    * {f_dict['panofile']} [{len(image_list)}]")
+            if verbose:
+                for i in image_list:
+                    print(f"      >> {i}")
+        fp_img_dict[fp]=file_process_list 
+
+    if prompt & save:
+        if not (input("\nProceed (y)?")=="y"):
+            save=False
+
+    # process metadata transfer
+    print("\n### COPY METADATA ###")
+    cmd_s="_exiftool -all= test.jpg test2.jpg"
+
+    # exiftool command to delete all metadata
+    EXIFTOOL_DELETE="<EXIFTOOL> -all= <TO_FILES> -overwrite_original"
+    # exiftool command to copy metadata
+    # https://exiftool.org/forum/index.php?topic=3440.0
+    EXIFTOOL_COPY='<EXIFTOOL> -TagsFromFile <FROM_FILE> -ee -m "-all:all>all:all" -overwrite_original <TO_FILES>'
+    # exiftool command to change software tag
+    EXIFTOOL_SOFTWARE='<EXIFTOOL> -Software="<SOFTWARE>" -overwrite_original <TO_FILES>'
+    EXIFTOOL_SOFTWARE=EXIFTOOL_SOFTWARE.replace("<SOFTWARE>",software)
+
+    exiftool_commands=[EXIFTOOL_DELETE,EXIFTOOL_COPY,EXIFTOOL_SOFTWARE]
+    exiftool_commands=[cmd.replace("<EXIFTOOL>",exiftool) for cmd in exiftool_commands]
+
+    for fp,fp_items in fp_img_dict.items():    
+        os.chdir(fp)
+        print(f"\n--  FOLDER {fp}")
+
+        for fp_item in fp_items:                
+            from_file=fp_item.get("panofile","")
+            print(f"    * {from_file}")
+
+            # special case add software metatag to exported file
+            pano_file=str(Path(from_file).stem+".jpg")
+            if os.path.isfile(pano_file):                   
+                pano_file='"'+pano_file+'"'
+                exiftool_cmd=EXIFTOOL_SOFTWARE.replace("<TO_FILES>",pano_file)
+                exiftool_cmd=exiftool_cmd.replace("<EXIFTOOL>",exiftool)            
+                if save:
+                    if verbose:
+                        print(f"      {exiftool_cmd[:80]} ...")    
+                    os.system(exiftool_cmd)   
+                    all_exiftool_cmds.append(exiftool_cmd)
+                
+
+            # copy all metadata from pano raw file to screenshot files
+            from_file='"'+from_file+'"'
+            to_files=fp_item.get("image_list",[])
+            to_files=" ".join(to_files)        
+            for exiftool_cmd in exiftool_commands:
+                exiftool_cmd=exiftool_cmd.replace("<FROM_FILE>",from_file)
+                exiftool_cmd=exiftool_cmd.replace("<TO_FILES>",to_files)
+                if verbose:
+                    print(f"      {exiftool_cmd[:80]} ...")             
+                if save:
+                    os.system(exiftool_cmd)
+                    all_exiftool_cmds.append(exiftool_cmd)        
+
+    os.chdir(old_fp)               
+    print(f"\n### FINISHED, ({len(all_exiftool_cmds)}) Exiftool operations done ###")
+    return all_exiftool_cmds      
