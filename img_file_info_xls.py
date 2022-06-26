@@ -9,9 +9,10 @@ import re
 import shutil
 from datetime import date
 from pathlib import Path
-from image_meta.persistence import Persistence
-import traceback
+import shlex
+import subprocess
 import json
+import traceback
 import pandas as pd
 from PIL import Image
 from PIL import UnidentifiedImageError
@@ -58,6 +59,29 @@ REGEX_RULE_DICT={"REGEX_INSTAONEX":REGEX_INSTAONEX,
 # dataframe columns that list number of unnamed filenames
 UNNAMED_FILE_COLUMNS=["REGEX_ORIGINAL_NAME","REGEX_INSTAONEX"]
 
+# Subset of EXIF Attributes (-s Notation) that fit my purposes best
+EXIF_ATTRIBUTES=["Directory","FileName","FileSize","DateCreated",
+                 "ImageWidth","ImageHeight","ImageSize","Megapixels",
+                 "Make","Model","Lens","LensModel","LensSpec",
+                 "FocalLength","ScaleFactor35efl","FOV","FocalLength35efl",
+                 "CircleOfConfusion","HyperfocalDistance",
+                 "Software","ShutterSpeed","Aperture","ISO","LightValue",
+                 "Title","City","Sub-location","Province-State",
+                 "Country-PrimaryLocationName","Copyright",
+                 "SpecialInstructions",
+                 "GPSLatitude","GPSLatitudeRef",
+                 "GPSLongitude","GPSLongitudeRef",
+                 "GPSPosition","Keywords"]
+
+EXIF_ATTRIBUTES_MINIMUM=["Directory","FileName",
+                         "Title","Make","Model","LensModel",
+                         "FocalLength","ShutterSpeed",
+                         "Aperture","ISO",
+                         "LightValue","Software"]
+
+# EXIFTOOL commands
+CMD_EXIF_DELETE_ALL='EXIFTOOL -all= -r * -ext jpg'
+CMD_EXIF_READ_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -charset latin -s -r -Directory * -ext jpg'
 
 def read_json(filepath:str):
     """ Reads JSON file"""
@@ -76,6 +100,49 @@ def read_json(filepath:str):
         print("***************")
 
     return data
+
+def save_json(filepath,data:dict):     
+    """ Saves dictionary data as UTF8 """         
+
+    with open(filepath, 'w', encoding='utf-8') as json_file:
+        try:
+            json.dump(data, json_file, indent=4,ensure_ascii=False)
+        except:
+            print(f"Exception writing file {filepath}")
+            print(traceback.format_exc())
+
+        return None 
+    
+def read_exif_attributes(filepath,encoding='utf-8',comment_marker="#",sep=":"):
+    """ reads data as lines from file """
+    lines = []
+    try:
+        with open(filepath,encoding=encoding) as fp:
+            for line in fp:
+                if len(line.strip())==0:
+                    continue
+                if line[0]==comment_marker:
+                    continue
+                lines.append(line.split(sep)[0].strip())
+    except:
+        print(f"Exception reading file {filepath}")
+        print(traceback.format_exc())
+    return lines
+
+def save_exif_attributes(filepath,attribute_list:list):     
+    """ list of attributes as command file """         
+        
+    with open(filepath, 'w', encoding="utf-8") as f:
+        for attribute in attribute_list:
+            try:                
+                f.write("-"+attribute+"\n")
+                s = "Data saved to " + filepath
+            except:
+                print(f"Exception writing file {filepath}")
+                print(traceback.format_exc())     
+                s = "No data was saved" 
+    return None
+
 
 def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,
              include_entropy=False,debug=False,include_app=False):
@@ -246,11 +313,13 @@ def get_subpath_info_dict(fp:str,type_raw=TYPE_RAW,type_meta=TYPE_META,
 
 def save_subpath_info_dict(subpath_info_dict,fp_json=None,fp_xls=None):
     if not fp_json is None:
-        Persistence.save_json(fp_json,subpath_info_dict)
+        save_json(fp_json,subpath_info_dict)
+        print(f"Saved JSON: {Path(fp_json).absolute()}")
     # save as xls
     if not fp_xls is None:
         df=pd.DataFrame.from_dict(subpath_info_dict,orient='index')
         df.to_excel(fp_xls)
+        print(f"Saved XLSX: {Path(fp_xls).absolute()}")
 
 def num_path_in_name(file_dict:dict,p:str):
     """ checks how many files contain path in name """
@@ -564,6 +633,14 @@ def delete_subfolders(fp_root:str,verbose=False,delete_folder_list=["metadata"],
 
     return delete_folders
 
+def exiftool_found(exiftool="exiftool.exe"):
+    exiftool_which=shutil.which(exiftool)
+    if not exiftool_which:
+        print(f"Exiftool {exiftool} not found, check path")    
+        return None
+    else:
+        return exiftool_which
+
 def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
                                 max_level=1,
                                 verbose=True,save=True,
@@ -583,14 +660,14 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
             d[regex[0]]={"panofile":f}
         return None
 
-    exiftool_which=shutil.which(exiftool)
-    if not exiftool_which:
-        print(f"Exiftool {exiftool} not found, check path")    
-        return []
-    else:
-        print(f"Copy Metadata Using EXIFTOOL {exiftool_which}")
+    exiftool_used=exiftool_found(exiftool)
+
+    if exiftool_used:
+        print(f"Copy Metadata Using EXIFTOOL {exiftool_used}")
         print(f"Root Path {fp_root}, max folder level {max_level}")
-        print(f"Pano Filetypes {pano_filetypes}, Image Filetypes {jpg_filetypes}")
+        print(f"Pano Filetypes {pano_filetypes}, Image Filetypes {jpg_filetypes}")        
+    else:
+        return []
 
     file_dict=get_file_dict(fp_root)
 
@@ -703,4 +780,80 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
 
     os.chdir(old_fp)               
     print(f"\n### FINISHED, ({len(all_exiftool_cmds)}) Exiftool operations done ###")
-    return all_exiftool_cmds      
+    return all_exiftool_cmds
+
+def exiftool_read_meta_recursive(fp_root=None,
+                                 exif_attributes=EXIF_ATTRIBUTES,
+                                 exiftool="exiftool.exe",
+                                 debug=False)->dict:    
+    """ recursively read jpeg information """
+    # save current directory to switch back after operation 
+    fp_original=os.getcwd()
+    cmd_exif_read_recursive=CMD_EXIF_READ_RECURSIVE_TEMPLATE
+    if exiftool_found(exiftool):
+        cmd_exif_read_recursive=cmd_exif_read_recursive.replace("EXIFTOOL",exiftool)
+    else:
+        return {} 
+    
+    fp=fp_original
+    if (not fp_root is None) and os.path.isdir(fp_root):
+        fp=fp_root            
+    os.chdir(fp)    
+    exif_attribute_list=" ".join(["-"+att for att in exif_attributes])    
+    os_cmd=cmd_exif_read_recursive.replace("EXIF_ATTRIBUTES",exif_attribute_list)
+    if debug:
+        print(f"*** Path: {fp}")
+        print("    "+ os_cmd)        
+    oscmd_shlex=shlex.split(os_cmd)
+    process = subprocess.run(oscmd_shlex,
+                             stdout=subprocess.PIPE, 
+                             universal_newlines=False)
+    
+    retcode=process.returncode
+    if debug:
+        print(f"    EXIFTOOL finished, return Code: {retcode}")        
+    
+    os.chdir(fp_original)  
+    
+    if not retcode==0:
+        return {}
+    
+    # get data as dictionary
+    imginfo_s=process.stdout.decode("utf-8")
+    imginfo_list=json.loads(imginfo_s)
+    if debug:
+        print(f"*** Number of Images processed {len(imginfo_list)}")
+    
+    img_dict={}
+    for imginfo in imginfo_list:
+        #print(imginfo)'Directory': '.', 'FileName': 'exif_a6600.jpg'
+        p=str(Path(os.path.join(imginfo["Directory"],imginfo["FileName"])).absolute())
+        if debug:
+            print("  - "+p)
+        img_dict[p]=imginfo
+              
+    return img_dict
+
+def exiftool_get_descriptions(img_info_dict:dict):
+    """ creates image description dictionary """
+    imginfo_description_dict={}
+    for fp,img_info in img_info_dict.items():
+        s="" 
+        if img_info.get("Title",None):s+=img_info["Title"]
+        s+=" ["    
+        if img_info.get("Make",None):s+=img_info["Make"]
+        if img_info.get("Model",None):s+=" "+img_info["Model"]
+        if img_info.get("LensModel",None): s+="|"+img_info["LensModel"]
+        if img_info.get("FocalLength",None): s+=" "+img_info["FocalLength"]
+        if img_info.get("ShutterSpeed",None): s+=" "+img_info["ShutterSpeed"]+"s"
+        if img_info.get("Aperture",None): s+=" F"+str(img_info["Aperture"])
+        if img_info.get("ISO",None): s+=" ISO"+str(img_info["ISO"])
+        if img_info.get("LightValue",None): s+=", "+str(img_info["LightValue"])+"LV"
+        if img_info.get("Software",None): s+=", Software: "+img_info["Software"]    
+        s+="]"
+        if img_info.get("SpecialInstructions",None): s+="; Geolink: "+img_info["SpecialInstructions"]    
+        imginfo_description_dict[str(fp)]=s
+        img_info["Description"]=s+"]"
+    
+    # return img_info_dict  
+    return imginfo_description_dict    
