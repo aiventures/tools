@@ -101,8 +101,8 @@ def read_json(filepath:str):
 
     return data
 
-def save_json(filepath,data:dict):     
-    """ Saves dictionary data as UTF8 """         
+def save_json(filepath,data:dict):
+    """ Saves dictionary data as UTF8 """
 
     with open(filepath, 'w', encoding='utf-8') as json_file:
         try:
@@ -111,8 +111,8 @@ def save_json(filepath,data:dict):
             print(f"Exception writing file {filepath}")
             print(traceback.format_exc())
 
-        return None 
-    
+        return None
+
 def read_exif_attributes(filepath,encoding='utf-8',comment_marker="#",sep=":"):
     """ reads data as lines from file """
     lines = []
@@ -129,18 +129,18 @@ def read_exif_attributes(filepath,encoding='utf-8',comment_marker="#",sep=":"):
         print(traceback.format_exc())
     return lines
 
-def save_exif_attributes(filepath,attribute_list:list):     
-    """ list of attributes as command file """         
-        
+def save_exif_attributes(filepath,attribute_list:list):
+    """ list of attributes as command file """
+
     with open(filepath, 'w', encoding="utf-8") as f:
         for attribute in attribute_list:
-            try:                
+            try:
                 f.write("-"+attribute+"\n")
                 s = "Data saved to " + filepath
             except:
                 print(f"Exception writing file {filepath}")
-                print(traceback.format_exc())     
-                s = "No data was saved" 
+                print(traceback.format_exc())
+                s = "No data was saved"
     return None
 
 
@@ -214,7 +214,7 @@ def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,
             if s.lower() in edit_software.lower():
                 out_dict["edited"] = True
 
-    # image considered having metadata 
+    # image considered having metadata
     if out_dict["has_description"]  & out_dict["has_gps"]:
         out_dict["has_metadata"] = True
     else:
@@ -469,7 +469,7 @@ def rename_original_img_files(img_info_df:pd.DataFrame,file_dict:dict,
         p=Path(fp)
         if verbose:
             print(f"\n--- FOLDER {fp} ---")
-            
+
         foldername=p.stem
 
         # check if folder should be ignored
@@ -523,26 +523,26 @@ def delete_collateral_image_files(fp:str,exif_file_types=TYPE_JPG,verbose=False,
                                  do_not_process_files=DO_NOT_PROCESS_FILES,
                                  cleanup_filetypes=TYPE_CLEANUP,
                                  unnamed_file_columns=UNNAMED_FILE_COLUMNS):
-    
-    file_deletion_list=[] 
-    # get the file dictionary 
+
+    file_deletion_list=[]
+    # get the file dictionary
     file_dict=get_file_dict(fp,exif_file_types=exif_file_types)
     filedict_df=get_filepath_stat_df(file_dict)
     print(f"######## DELETING IN {fp}")
     if verbose: print(f"#FOLDERS (TOTAL)                       : {len(filedict_df)}")
-    
+
     # only get folders that contain JPG and a given folder level (do not consider files in subfolder)
     filedict_df=filedict_df[(filedict_df["TYPE_JPG"]==True)&(filedict_df["level"]<=max_level)]
     num_jpg_only=len(filedict_df)
     filedict_df=filedict_df[filedict_df["NUM_HAS_METADATA"]>0]
     num_metadata=len(filedict_df)
     columns=filedict_df.columns
-    
+
     unnamed_file_columns=[c for c in unnamed_file_columns if c in columns]
-    
+
     # sum columns that count not renamed files
     filedict_df["SUM_NOT_RENAMED"]=filedict_df[unnamed_file_columns].sum(axis=1)
-    filedict_df=filedict_df[filedict_df["SUM_NOT_RENAMED"]==0]    
+    filedict_df=filedict_df[filedict_df["SUM_NOT_RENAMED"]==0]
     if verbose:
         print(f"#FOLDERS (JPEG only, folder level < {max_level}) : {num_jpg_only}")
         print(f"#FOLDERS (FILES WITH METADATA)         : {num_metadata}")
@@ -573,24 +573,24 @@ def delete_collateral_image_files(fp:str,exif_file_types=TYPE_JPG,verbose=False,
             if verbose: print(f"    * {f_name}")
             file_deletion_list.append(str(f))
 
-        print(f"    Files to delete: {num_files_for_delete}/{num_files_total}")        
+        print(f"    Files to delete: {num_files_for_delete}/{num_files_total}")
         num_delete+=num_files_for_delete
     print(f"\n##  FILES TO DELETE: {num_delete} ##")
-        
+
     if delete:
-        if (num_delete > 0) & prompt:        
+        if (num_delete > 0) & prompt:
             if input(f"Delete (y)?") == 'y':
                 for f in file_deletion_list:
                     if os.path.isfile(f):
-                        os.remove(f)                       
+                        os.remove(f)
 
     return file_deletion_list
 
 def delete_subfolders(fp_root:str,verbose=False,delete_folder_list=["metadata"],
                       prompt=True,delete=True):
     """ Delete Subfolders that contain delete_folder_list substring """
-    
-    print(f"Deleting Subfolders {delete_folder_list} in path {fp_root}")    
+
+    print(f"Deleting Subfolders {delete_folder_list} in path {fp_root}")
     delete_folders=[]
     file_dict=get_file_dict(fp_root)
     for fp,fp_data in file_dict.items():
@@ -601,7 +601,7 @@ def delete_subfolders(fp_root:str,verbose=False,delete_folder_list=["metadata"],
         # check if folder is in delete folder list
         #print(stem)
         #print(to_delete)
-        to_be_deleted=any([(del_fld in stem) for del_fld in delete_folder_list])    
+        to_be_deleted=any([(del_fld in stem) for del_fld in delete_folder_list])
         if not to_be_deleted:
             continue
 
@@ -617,7 +617,7 @@ def delete_subfolders(fp_root:str,verbose=False,delete_folder_list=["metadata"],
                 filetypes.append(filetype)
         print(f"    FILETYPES: {filetypes} --")
 
-    if len(delete_folders)>0 and delete:    
+    if len(delete_folders)>0 and delete:
         num_del=0
         if prompt:
             answer=input("\nDELETE (y) ? ")
@@ -636,7 +636,7 @@ def delete_subfolders(fp_root:str,verbose=False,delete_folder_list=["metadata"],
 def exiftool_found(exiftool="exiftool.exe"):
     exiftool_which=shutil.which(exiftool)
     if not exiftool_which:
-        print(f"Exiftool {exiftool} not found, check path")    
+        print(f"Exiftool {exiftool} not found, check path")
         return None
     else:
         return exiftool_which
@@ -665,7 +665,7 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
     if exiftool_used:
         print(f"Copy Metadata Using EXIFTOOL {exiftool_used}")
         print(f"Root Path {fp_root}, max folder level {max_level}")
-        print(f"Pano Filetypes {pano_filetypes}, Image Filetypes {jpg_filetypes}")        
+        print(f"Pano Filetypes {pano_filetypes}, Image Filetypes {jpg_filetypes}")
     else:
         return []
 
@@ -693,7 +693,7 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
         pano_files=[f for f in file_list if (Path(f).suffix[1:] in pano_filetypes)]
 
         # add to pano filedict
-        [add_pano_fileinfo(f,pano_file_dict) for f in pano_files]    
+        [add_pano_fileinfo(f,pano_file_dict) for f in pano_files]
         img_files=[f for f in file_list if (Path(f).suffix[1:] in jpg_filetypes)]
 
         # get a dictionary containing the list of files
@@ -702,11 +702,11 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
             if not len(img_key)==1:
                 continue
 
-            pano_dict=pano_file_dict.get(img_key[0],None)        
+            pano_dict=pano_file_dict.get(img_key[0],None)
             if not pano_dict:
-                continue        
+                continue
 
-            # do not write metadata for image file having same name as 
+            # do not write metadata for image file having same name as
             # pano file (its a direct export cxontianing metadata already)
             if Path(pano_dict.get("panofile","")).stem==Path(img_file).stem:
                 continue
@@ -715,14 +715,14 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
             image_list.append('"'+img_file+'"')
             pano_dict["image_list"]=image_list
 
-        file_process_list=list(pano_file_dict.values())        
+        file_process_list=list(pano_file_dict.values())
         for f_dict in file_process_list:
             image_list=f_dict.get('image_list',[])
             print(f"    * {f_dict['panofile']} [{len(image_list)}]")
             if verbose:
                 for i in image_list:
                     print(f"      >> {i}")
-        fp_img_dict[fp]=file_process_list 
+        fp_img_dict[fp]=file_process_list
 
     if prompt & save:
         if not (input("\nProceed (y)?")=="y"):
@@ -744,86 +744,86 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
     exiftool_commands=[EXIFTOOL_DELETE,EXIFTOOL_COPY,EXIFTOOL_SOFTWARE]
     exiftool_commands=[cmd.replace("<EXIFTOOL>",exiftool) for cmd in exiftool_commands]
 
-    for fp,fp_items in fp_img_dict.items():    
+    for fp,fp_items in fp_img_dict.items():
         os.chdir(fp)
         print(f"\n--  FOLDER {fp}")
 
-        for fp_item in fp_items:                
+        for fp_item in fp_items:
             from_file=fp_item.get("panofile","")
             print(f"    * {from_file}")
 
             # special case add software metatag to exported file
             pano_file=str(Path(from_file).stem+".jpg")
-            if os.path.isfile(pano_file):                   
+            if os.path.isfile(pano_file):
                 pano_file='"'+pano_file+'"'
                 exiftool_cmd=EXIFTOOL_SOFTWARE.replace("<TO_FILES>",pano_file)
-                exiftool_cmd=exiftool_cmd.replace("<EXIFTOOL>",exiftool)            
+                exiftool_cmd=exiftool_cmd.replace("<EXIFTOOL>",exiftool)
                 if save:
                     if verbose:
-                        print(f"      {exiftool_cmd[:80]} ...")    
-                    os.system(exiftool_cmd)   
+                        print(f"      {exiftool_cmd[:80]} ...")
+                    os.system(exiftool_cmd)
                     all_exiftool_cmds.append(exiftool_cmd)
-                
+
 
             # copy all metadata from pano raw file to screenshot files
             from_file='"'+from_file+'"'
             to_files=fp_item.get("image_list",[])
-            to_files=" ".join(to_files)        
+            to_files=" ".join(to_files)
             for exiftool_cmd in exiftool_commands:
                 exiftool_cmd=exiftool_cmd.replace("<FROM_FILE>",from_file)
                 exiftool_cmd=exiftool_cmd.replace("<TO_FILES>",to_files)
                 if verbose:
-                    print(f"      {exiftool_cmd[:80]} ...")             
+                    print(f"      {exiftool_cmd[:80]} ...")
                 if save:
                     os.system(exiftool_cmd)
-                    all_exiftool_cmds.append(exiftool_cmd)        
+                    all_exiftool_cmds.append(exiftool_cmd)
 
-    os.chdir(old_fp)               
+    os.chdir(old_fp)
     print(f"\n### FINISHED, ({len(all_exiftool_cmds)}) Exiftool operations done ###")
     return all_exiftool_cmds
 
 def exiftool_read_meta_recursive(fp_root=None,
                                  exif_attributes=EXIF_ATTRIBUTES,
                                  exiftool="exiftool.exe",
-                                 debug=False)->dict:    
+                                 debug=False)->dict:
     """ recursively read jpeg information """
-    # save current directory to switch back after operation 
+    # save current directory to switch back after operation
     fp_original=os.getcwd()
     cmd_exif_read_recursive=CMD_EXIF_READ_RECURSIVE_TEMPLATE
     if exiftool_found(exiftool):
         cmd_exif_read_recursive=cmd_exif_read_recursive.replace("EXIFTOOL",exiftool)
     else:
-        return {} 
-    
+        return {}
+
     fp=fp_original
     if (not fp_root is None) and os.path.isdir(fp_root):
-        fp=fp_root            
-    os.chdir(fp)    
-    exif_attribute_list=" ".join(["-"+att for att in exif_attributes])    
+        fp=fp_root
+    os.chdir(fp)
+    exif_attribute_list=" ".join(["-"+att for att in exif_attributes])
     os_cmd=cmd_exif_read_recursive.replace("EXIF_ATTRIBUTES",exif_attribute_list)
     if debug:
         print(f"*** Path: {fp}")
-        print("    "+ os_cmd)        
+        print("    "+ os_cmd)
     oscmd_shlex=shlex.split(os_cmd)
     process = subprocess.run(oscmd_shlex,
-                             stdout=subprocess.PIPE, 
+                             stdout=subprocess.PIPE,
                              universal_newlines=False)
-    
+
     retcode=process.returncode
     if debug:
-        print(f"    EXIFTOOL finished, return Code: {retcode}")        
-    
-    os.chdir(fp_original)  
-    
+        print(f"    EXIFTOOL finished, return Code: {retcode}")
+
+    os.chdir(fp_original)
+
     if not retcode==0:
         return {}
-    
+
     # get data as dictionary
     imginfo_s=process.stdout.decode("utf-8")
     imginfo_list=json.loads(imginfo_s)
     if debug:
         print(f"*** Number of Images processed {len(imginfo_list)}")
-    
+
     img_dict={}
     for imginfo in imginfo_list:
         #print(imginfo)'Directory': '.', 'FileName': 'exif_a6600.jpg'
@@ -831,16 +831,16 @@ def exiftool_read_meta_recursive(fp_root=None,
         if debug:
             print("  - "+p)
         img_dict[p]=imginfo
-              
+
     return img_dict
 
 def exiftool_get_descriptions(img_info_dict:dict):
     """ creates image description dictionary """
     imginfo_description_dict={}
     for fp,img_info in img_info_dict.items():
-        s="" 
+        s=""
         if img_info.get("Title",None):s+=img_info["Title"]
-        s+=" ["    
+        s+=" ["
         if img_info.get("Make",None):s+=img_info["Make"]
         if img_info.get("Model",None):s+=" "+img_info["Model"]
         if img_info.get("LensModel",None): s+="|"+img_info["LensModel"]
@@ -849,11 +849,11 @@ def exiftool_get_descriptions(img_info_dict:dict):
         if img_info.get("Aperture",None): s+=" F"+str(img_info["Aperture"])
         if img_info.get("ISO",None): s+=" ISO"+str(img_info["ISO"])
         if img_info.get("LightValue",None): s+=", "+str(img_info["LightValue"])+"LV"
-        if img_info.get("Software",None): s+=", Software: "+img_info["Software"]    
+        if img_info.get("Software",None): s+=", Software: "+img_info["Software"]
         s+="]"
-        if img_info.get("SpecialInstructions",None): s+="; Geolink: "+img_info["SpecialInstructions"]    
+        if img_info.get("SpecialInstructions",None): s+="; Geolink: "+img_info["SpecialInstructions"]
         imginfo_description_dict[str(fp)]=s
         img_info["Description"]=s+"]"
-    
-    # return img_info_dict  
-    return imginfo_description_dict    
+
+    # return img_info_dict
+    return imginfo_description_dict
