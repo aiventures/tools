@@ -633,13 +633,13 @@ def delete_subfolders(fp_root:str,verbose=False,delete_folder_list=["metadata"],
 
     return delete_folders
 
-def exiftool_found(exiftool="exiftool.exe"):
-    exiftool_which=shutil.which(exiftool)
-    if not exiftool_which:
-        print(f"Exiftool {exiftool} not found, check path")
+def program_found(program="exiftool.exe"):
+    program_which=shutil.which(program)
+    if not program_which:
+        print(f"Program {program} not found, check path")
         return None
     else:
-        return exiftool_which
+        return program_which
 
 def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
                                 max_level=1,
@@ -660,7 +660,7 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
             d[regex[0]]={"panofile":f}
         return None
 
-    exiftool_used=exiftool_found(exiftool)
+    exiftool_used=program_found(exiftool)
 
     if exiftool_used:
         print(f"Copy Metadata Using EXIFTOOL {exiftool_used}")
@@ -790,7 +790,7 @@ def exiftool_read_meta_recursive(fp_root=None,
     # save current directory to switch back after operation
     fp_original=os.getcwd()
     cmd_exif_read_recursive=CMD_EXIF_READ_RECURSIVE_TEMPLATE
-    if exiftool_found(exiftool):
+    if program_found(exiftool):
         cmd_exif_read_recursive=cmd_exif_read_recursive.replace("EXIFTOOL",exiftool)
     else:
         return {}
@@ -857,3 +857,41 @@ def exiftool_get_descriptions(img_info_dict:dict):
 
     # return img_info_dict
     return imginfo_description_dict
+
+def exiftool_delete_metadata(fp,preview=True,exiftool="exiftool.exe",prompt=True,delete=True):
+    """ removes all exif metadata for jpg files in path  """
+    fp_original=os.getcwd()    
+    if program_found(exiftool):
+        cmd_exif_delete_all=CMD_EXIF_DELETE_ALL.replace("EXIFTOOL",exiftool)
+    else:
+        return -1
+
+    if os.path.isdir(fp):
+       os.chdir(fp) 
+    else:
+        print(f"{fp} is not a directory, pls check")
+        return -2
+
+    if preview:
+        print("*** Files for EXIF data deletion ***")
+        img_dict=exiftool_read_meta_recursive(fp)
+        for f,desc in img_dict.items():
+            s=desc.get("Title","")+" ["+desc.get("Make","")
+            s+=" "+desc.get("Model","")+"|"+desc.get("LensModel","")+"]"
+            s+="\n    "+desc.get("SpecialInstructions","")
+            print(f" *  {f}\n    {s}")
+
+    if prompt==True and (input(f"\nDelete metadata for files in {fp} (y)")=="y"):
+        delete=True
+
+    if delete:
+        oscmd_shlex=shlex.split(cmd_exif_delete_all)
+        process = subprocess.run(oscmd_shlex,
+                                 stdout=subprocess.PIPE,
+                                 universal_newlines=False)
+        retcode=process.returncode
+        stdout=process.stdout.decode("UTF-8")
+
+    print(f"EXIFTOOL [{cmd_exif_delete_all}], return Code: {retcode}\n{stdout}")        
+    os.chdir(fp_original) 
+    return retcode    
