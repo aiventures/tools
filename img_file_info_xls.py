@@ -77,11 +77,15 @@ EXIF_ATTRIBUTES_MINIMUM=["Directory","FileName",
                          "Title","Make","Model","LensModel",
                          "FocalLength","ShutterSpeed",
                          "Aperture","ISO",
-                         "LightValue","Software"]
+                         "LightValue","Software",
+                          "SpecialInstructions"]
 
 # EXIFTOOL commands
 CMD_EXIF_DELETE_ALL='EXIFTOOL -all= -r * -ext jpg'
 CMD_EXIF_READ_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -charset latin -s -r -Directory * -ext jpg'
+
+# MAGICK commands
+CMD_MAGICK_RESIZE="_MAGICK convert _FILE_IN -resize _IMAGESIZEx -quality _QUALITY _FILE_OUT"
 
 def read_json(filepath:str):
     """ Reads JSON file"""
@@ -813,8 +817,6 @@ def exiftool_read_meta_recursive(fp_root=None,
     if debug:
         print(f"    EXIFTOOL finished, return Code: {retcode}")
 
-    os.chdir(fp_original)
-
     if not retcode==0:
         return {}
 
@@ -831,6 +833,8 @@ def exiftool_read_meta_recursive(fp_root=None,
         if debug:
             print("  - "+p)
         img_dict[p]=imginfo
+
+    os.chdir(fp_original)        
 
     return img_dict
 
@@ -851,7 +855,7 @@ def exiftool_get_descriptions(img_info_dict:dict):
         if img_info.get("LightValue",None): s+=", "+str(img_info["LightValue"])+"LV"
         if img_info.get("Software",None): s+=", Software: "+img_info["Software"]
         s+="]"
-        if img_info.get("SpecialInstructions",None): s+="; Geolink: "+img_info["SpecialInstructions"]
+        if img_info.get("SpecialInstructions",None): s+=" Geolink: "+img_info["SpecialInstructions"]
         imginfo_description_dict[str(fp)]=s
         img_info["Description"]=s+"]"
 
@@ -893,5 +897,110 @@ def exiftool_delete_metadata(fp,preview=True,exiftool="exiftool.exe",prompt=True
         stdout=process.stdout.decode("UTF-8")
 
     print(f"EXIFTOOL [{cmd_exif_delete_all}], return Code: {retcode}\n{stdout}")        
-    os.chdir(fp_original) 
-    return retcode    
+    os.chdir(fp_original)
+    return retcode
+
+def magick_resize(fp,magick="magick.exe",image_size=2000,
+                  quality=90,prefix=False,
+                  remove_metadata=True,save=True,
+                  descriptions=True,
+                  target_path=None):
+    """ resize image / optionally remove metadata, params
+        fp: file path containing image files
+        magick: executable, needs to be executable through system path
+        image_size: width of image after resize
+        quality=90
+        prefix=write prefix (True) or as suffix (False)
+        remove_metadata=True (remove exif metadata from target file)
+        save=True (save images)
+        descriptions (True) create descriptions
+        target_path = None (target path where to store images is fp isf None)
+        returns dict of images 
+    """ 
+    
+    if not program_found(magick):
+        return {}
+    
+    fp_original=os.getcwd()
+    
+    file_addition=str(image_size)+"px"    
+    attributes=["_MAGICK","_IMAGESIZE","_QUALITY"]
+    values=[magick,str(image_size),str(quality)]
+    magick_resize=CMD_MAGICK_RESIZE
+    for k,v in dict(zip(attributes,values)).items():
+        magick_resize=magick_resize.replace(k,v)
+    
+    if remove_metadata:
+        magick_resize=magick_resize.replace("resize","thumbnail")
+    print(f"*** MAGICK template: [{magick_resize}]")
+
+    # get files per path
+    img_dict=exiftool_read_meta_recursive(fp,
+             exif_attributes=EXIF_ATTRIBUTES_MINIMUM)
+    
+    img_dict={p:v for (p,v) in img_dict.items() if file_addition not in Path(p).stem }     
+    
+    # get image descriptions
+    if descriptions:
+        img_descriptions_dict=exiftool_get_descriptions(img_dict)
+        s_list=[]
+        for f,d in img_descriptions_dict.items():
+            s_list.append(f+":\n")
+            s_list.append(d+"\n")
+            
+        if target_path:
+            os.chdir(target_path)
+        else:
+            os.chdir(fp_original)
+        print(f"    Write descriptions to {os.path.join(os.getcwd(),'descriptions.txt')}")
+        
+        with open('descriptions.txt', 'w') as file:          
+            file.writelines(s_list)
+    
+    image_dict={}
+    for fp,img_info in img_dict.items():    
+        p_img=str(Path(img_info["Directory"]).absolute())
+        img_list=image_dict.get(p_img,[])
+        img_list.append(img_info["FileName"])
+        image_dict[p_img]=img_list    
+    
+
+    # do the changes for each folder
+    for p,files in image_dict.items():
+        os.chdir(p)
+        print(f"\n*** FOLDER {p}")
+
+        for f in files:
+            # skip processing if it already contains file addition
+            #print(f"    - {f}")
+            file_path=Path(f)
+            file_out=file_path.stem
+
+            if prefix:
+                file_out=file_addition+"_"+file_out+file_path.suffix
+            else:
+                file_out=file_out+"_"+file_addition+file_path.suffix
+
+            if target_path:
+                file_out=str(Path(os.path.join(target_path,file_out)).absolute())
+            file_out='"'+file_out+'"'
+            # print(file_out)
+
+            magick_file_resize=magick_resize.replace("_FILE_IN",'"'+f+'"')
+            magick_file_resize=magick_file_resize.replace("_FILE_OUT",file_out)        
+            #print(f"    {magick_file_resize}")
+            oscmd_shlex=shlex.split(magick_file_resize,posix=True)
+            #print(oscmd_shlex)
+            print(f"    - {f:<25} > {file_out}")
+            #print(oscmd_shlex)
+            #print(f"{file_path.stem}  {file_path.suffix}")
+            if save:
+                process = subprocess.run(oscmd_shlex,
+                                         stdout=subprocess.PIPE,
+                                         universal_newlines=False)
+                retcode=process.returncode
+                stdout=process.stdout.decode("UTF-8")
+                if retcode != 0:
+                    print(f"Return code {retcode}, command {oscmd_shlex}")
+    os.chdir(fp_original)            
+    return image_dict         
