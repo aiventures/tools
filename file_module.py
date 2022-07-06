@@ -130,5 +130,11 @@ def print_file_info(file_info_dict):
             # print(f"open \"{os.path.join(p,filename)}\"  ({type(content)})")
             print(f"open \"{os.path.join(p,filename)}\"")
             if not content is None:
-                print(content)
+                try:
+                    print(str(content))
+                except:       
+                    try:             
+                        print(str(content).encode('utf-8').decode('cp1252','ignore'))
+                    except:
+                        print(str(content).encode('utf-8').decode('ascii','ignore'))
     return None
