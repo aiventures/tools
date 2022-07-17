@@ -17,6 +17,7 @@ import pandas as pd
 from PIL import Image
 from PIL import UnidentifiedImageError
 from PIL.ExifTags import TAGS
+from datetime import datetime
 
 # Relevant fields
 EXIF_FIELDS=["Software","Copyright","Make","Model","LensModel",
@@ -47,6 +48,8 @@ FILETYPE_CLASSES_DICT={"TYPE_RAW":TYPE_RAW,
 DO_NOT_PROCESS_FILES=["metadata.tpl","metadata_exif.tpl","default.geo"]
 IGNORE_FOLDERS=["insp","post"]
 
+# Regex for Date Prefix YYYYMMDD_
+REGEX_DATE_PREFIX=r"^(\d{8})_"
 # YYYYMMDD _  HHMMSS _ 00/10 _ NUM(3DIGITS)
 REGEX_INSTAONEX=r"IMG_(\d{8})_(\d{6})_(\d{2})_(\d{3})"
 # RAW PREFIX NUM(5DIGITS)
@@ -60,8 +63,10 @@ REGEX_RULE_DICT={"REGEX_INSTAONEX":REGEX_INSTAONEX,
 UNNAMED_FILE_COLUMNS=["REGEX_ORIGINAL_NAME","REGEX_INSTAONEX"]
 
 # Subset of EXIF Attributes (-s Notation) that fit my purposes best
-EXIF_ATTRIBUTES=["Directory","FileName","FileSize","DateCreated",
-                 "ImageWidth","ImageHeight","ImageSize","Megapixels",
+# -n outputs values as numerical (mind string handling) and # will force a
+# variable to be output as numerical value
+EXIF_ATTRIBUTES=["Directory","FileName","FileSize#","DateCreated",
+                 "ImageWidth","ImageHeight","ImageSize","Megapixels#",
                  "Make","Model","Lens","LensModel","LensSpec",
                  "FocalLength","ScaleFactor35efl","FOV","FocalLength35efl",
                  "CircleOfConfusion","HyperfocalDistance",
@@ -71,18 +76,22 @@ EXIF_ATTRIBUTES=["Directory","FileName","FileSize","DateCreated",
                  "SpecialInstructions",
                  "GPSLatitude","GPSLatitudeRef",
                  "GPSLongitude","GPSLongitudeRef",
-                 "GPSPosition","Keywords"]
+                 "GPSPosition","Keywords","DateTime","DateTimeOriginal"]
 
 EXIF_ATTRIBUTES_MINIMUM=["Directory","FileName",
                          "Title","Make","Model","LensModel",
                          "FocalLength","ShutterSpeed",
                          "Aperture","ISO",
                          "LightValue","Software",
-                          "SpecialInstructions"]
+                         "SpecialInstructions",
+                         "DateTime","DateTimeOriginal"]
 
 # EXIFTOOL commands
 CMD_EXIF_DELETE_ALL='EXIFTOOL -all= -r * -ext jpg'
 CMD_EXIF_READ_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -charset latin -s -r -Directory * -ext jpg'
+# CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -L -s -r -Directory * -ext jpg -ext arw -ext tif'
+CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -L -s -r -n -Directory *'
+
 
 # MAGICK commands
 CMD_MAGICK_RESIZE="_MAGICK convert _FILE_IN -resize _IMAGESIZEx -quality _QUALITY _FILE_OUT"
@@ -140,11 +149,11 @@ def save_exif_attributes(filepath,attribute_list:list):
         for attribute in attribute_list:
             try:
                 f.write("-"+attribute+"\n")
-                s = "Data saved to " + filepath
+                #s = "Data saved to " + filepath
             except:
                 print(f"Exception writing file {filepath}")
                 print(traceback.format_exc())
-                s = "No data was saved"
+                #s = "No data was saved"
     return None
 
 
@@ -789,11 +798,11 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
 def exiftool_read_meta_recursive(fp_root=None,
                                  exif_attributes=EXIF_ATTRIBUTES,
                                  exiftool="exiftool.exe",
-                                 debug=False)->dict:
+                                 debug=False,exif_template=CMD_EXIF_READ_RECURSIVE_TEMPLATE)->dict:
     """ recursively read jpeg information """
     # save current directory to switch back after operation
     fp_original=os.getcwd()
-    cmd_exif_read_recursive=CMD_EXIF_READ_RECURSIVE_TEMPLATE
+    cmd_exif_read_recursive=exif_template
     if program_found(exiftool):
         cmd_exif_read_recursive=cmd_exif_read_recursive.replace("EXIFTOOL",exiftool)
     else:
@@ -829,7 +838,7 @@ def exiftool_read_meta_recursive(fp_root=None,
     img_dict={}
     for imginfo in imginfo_list:
         #print(imginfo)'Directory': '.', 'FileName': 'exif_a6600.jpg'
-        p=str(Path(os.path.join(imginfo["Directory"],imginfo["FileName"])).absolute())
+        p=str(Path(os.path.join(str(imginfo["Directory"]),str(imginfo["FileName"]))).absolute())
         if debug:
             print("  - "+p)
         img_dict[p]=imginfo
@@ -1003,4 +1012,158 @@ def magick_resize(fp,magick="magick.exe",image_size=2000,
                 if retcode != 0:
                     print(f"Return code {retcode}, command {oscmd_shlex}")
     os.chdir(fp_original)            
-    return image_dict         
+    return image_dict
+
+def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE,debug=False):
+    """ reads files using exiftool and returns a dictionary with path as key 
+        exif_template can be used to extract only a subset of attributes
+        NOTE: somehow exiftool doesn't parse all file types 
+    """
+    img_dict=exiftool_read_meta_recursive(fp_root=fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE,                                              
+                                                   debug=debug)
+    print(f"*** Read: {len(img_dict.keys())} files")    
+    
+    p_root=Path(fp)
+    num_root=len(p_root.parts)
+    path_dict={}
+    for f,f_info in img_dict.items():
+        fp=Path(f)
+        p_parent=fp.parent
+        p_file=str(fp.name)
+        p_suffix=fp.suffix[1:].lower()
+
+        path_info=path_dict.get(str(p_parent),{})    
+        # folder level        
+        level=len(p_parent.parts)-num_root
+
+        path_info["level"]=level    
+        path_filetypes=path_info.get("filetypes",{})
+        path_num_files=path_filetypes.get(p_suffix,0)+1
+        path_filetypes[p_suffix]=path_num_files
+        path_info["filetypes"]=path_filetypes
+
+        # get date
+        try:
+            dt = datetime.strptime(f_info.get("DateTimeOriginal",""), "%Y:%m:%d %H:%M:%S")
+        except ValueError as e:
+            dt = datetime.now()
+
+        dts=dt.strftime("%Y%m%d")
+        f_info["Date"]=dts
+        f_info["Filetype"]=p_suffix
+        f_info["has_gps"]=(f_info.get("GPSLatitude",0)>0)
+        f_info["has_metadata"]=(len(f_info.get("Keywords",[]))>0)   
+
+        file_dict=path_info.get("file_dict",{})
+        file_dict[p_file]=f_info
+        path_info["file_dict"]=file_dict
+        path_dict[str(p_parent)]=path_info      
+    
+    if debug:   
+        print("\n")
+        for p,p_info in path_dict.items():
+            print(f"*** {p} {p_info['filetypes']}, level {p_info['level']}")
+    return path_dict
+
+def exiftool_get_rename_dict(path_dict,max_level=1):
+    """ determines whether files should be renamed
+        * input data is retrieved from exiftool_get_path_dict
+        * checks whether not renamed image files are present
+          (either SONY RAW Format or Panorama Camera)
+        * if parent folder contains date as prefix it will be used
+          if not, date prefix will tried to be retrieved from image metadata
+        * max_level folders bigger than this level will be ignored
+    """
+    
+    # todays date as fallback
+    d_today=datetime.now().strftime("%Y%m%d")
+
+    num_renames=0
+    rename_dict={}
+    
+    for p,p_info in path_dict.items():
+        dir_path=Path(p)
+        pathname=dir_path.name
+        
+        f_rename_list=[]
+           
+        folder_level=p_info['level']
+        if folder_level>max_level:
+            print(f"*** {p}")             
+            print(f"    folder level: {folder_level}, will be skipped")
+            continue                
+            
+        file_info=p_info.get("file_dict",{})
+        
+        # check if older contains date prefix
+        d_path=None
+        re_path_date=re.search(REGEX_DATE_PREFIX,pathname)
+        if re_path_date:
+            d_path=re_path_date.groups()[0]
+
+        for f,f_info in file_info.items():
+            f_new=f
+            # get regex matches 
+            regex_matches={regex_rule:re.findall(REGEX_RULE_DICT[regex_rule],f) for regex_rule in REGEX_RULE_DICT.keys()}
+            regex_matches={rule:regex_matches[rule] for rule in regex_matches.keys() if bool(regex_matches[rule])}                
+            if bool(regex_matches):
+                rule_name_matched=list(regex_matches.keys())[0]
+                rule_matches=list(regex_matches.values())[0][0]
+
+                # now get the date prefix either from folder or from file
+                # path date is given
+                if d_path:
+                    f_new=pathname+"_"
+                else:
+                    d=f_info.get("Date",d_today)
+                    f_new=d+"_"+pathname+"_"
+                suffix=Path(f).suffix
+                # create new file name
+                if rule_name_matched=="REGEX_ORIGINAL_NAME":
+                    f_new+=rule_matches[1]            
+                elif rule_name_matched=="REGEX_INSTAONEX":
+                    f_new+=f[23:-(len(suffix))]
+                f_new+=suffix
+            if not f==f_new:
+                num_renames+=1
+                #if debug:
+                #    print(f"    RENAME {(f+' |OLD'):>70} \n           {(f_new+' |NEW'):>70}")          
+                f_rename_list.append({"f_old":f,"f_new":f_new})
+        if len(f_rename_list)>0:
+            rename_dict[p]=f_rename_list
+    
+    p_old=os.getcwd()
+    num_renamed=0
+    for p,file_list in rename_dict.items():
+        #os.chdir(p)
+        print(f"*** {p}")
+        for f_rename_dict in file_list:
+            num_renamed+=1    
+            f_old=f_rename_dict["f_old"]
+            f_new=f_rename_dict["f_new"]
+            print(f'    + {num_renamed:03d} {f_old}\n    |     {f_new}') 
+    print(f"*** NUMBER OF RENAMES: {num_renames}")    
+    if num_renames==0:
+        print(f"    NO FILES FOR RENAME FOUND")   
+    
+    if num_renames>0 and (input("RENAME (y)? ")=="y"):
+        num_renamed=0
+        for p,file_list in rename_dict.items():
+            if os.path.isdir(p):
+                os.chdir(p)
+            else:
+                print(f"Path {p} doesn't exist (any more)")
+                continue
+                
+            for f_rename_dict in file_list:
+                try:
+                    os.rename(f_rename_dict["f_old"],f_rename_dict["f_new"])
+                    num_renamed+=1                  
+                except OSError as e:
+                    print(p)
+                    pf_old=os.path.join(p,f_rename_dict["f_old"])
+                    print(f"Error renaming file {pf_old}: {e}")
+                  
+        print(f"\n>>> RENAMED {num_renamed} files")            
+    os.chdir(p_old);    
+    return rename_dict    
