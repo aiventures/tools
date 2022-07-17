@@ -4,20 +4,19 @@
 
 # https://pillow.readthedocs.io/en/stable/index.html
 
+import json
 import os
 import re
-import shutil
-from datetime import date
-from pathlib import Path
 import shlex
+import shutil
 import subprocess
-import json
 import traceback
+from datetime import date, datetime
+from pathlib import Path
+
 import pandas as pd
-from PIL import Image
-from PIL import UnidentifiedImageError
+from PIL import Image, UnidentifiedImageError
 from PIL.ExifTags import TAGS
-from datetime import datetime
 
 # Relevant fields
 EXIF_FIELDS=["Software","Copyright","Make","Model","LensModel",
@@ -239,13 +238,12 @@ def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,
     return out_dict
 
 def get_subpath_info_dict(fp:str,type_raw=TYPE_RAW,type_meta=TYPE_META,
-                        type_jpg=TYPE_JPG,type_cleanup=TYPE_CLEANUP,
-                        debug=False):
+                        type_jpg=TYPE_JPG,type_cleanup=TYPE_CLEANUP):
     """ reads file information in a given folder path """
     print(f"*** Check Image Files in {fp} ***")
     p_root=Path(fp)
     subpath_dict={}
-    for subpath,subdirs,files in os.walk(fp):
+    for subpath,_,files in os.walk(fp):
         # get aboslute path
         processed_file_checked=False
         for f in files:
@@ -325,6 +323,7 @@ def get_subpath_info_dict(fp:str,type_raw=TYPE_RAW,type_meta=TYPE_META,
     return subpath_dict
 
 def save_subpath_info_dict(subpath_info_dict,fp_json=None,fp_xls=None):
+    """ saving subpath info to a dict """
     if not fp_json is None:
         save_json(fp_json,subpath_info_dict)
         print(f"Saved JSON: {Path(fp_json).absolute()}")
@@ -350,7 +349,7 @@ def get_file_dict(fp:str,regex_file_rules_dict=REGEX_RULE_DICT,
     p_root_lvl=len(p_root.parts)
 
     # analyze on folder level
-    for subpath,subdirs,files in os.walk(fp):
+    for subpath,_,files in os.walk(fp):
         for f in files:
             # print("subpath",subpath)
             p=Path(subpath)
@@ -410,7 +409,7 @@ def get_file_dict(fp:str,regex_file_rules_dict=REGEX_RULE_DICT,
             file_exif_dict={}
             for f in files:
                 fp=Path(os.path.join(p,f))
-                if not (fp.suffix[1:]) in exif_file_types:
+                if not fp.suffix[1:] in exif_file_types:
                     continue
                 file_exif_dict[f]=read_exif(fp)
             if file_exif_dict:
@@ -460,7 +459,7 @@ def get_filepath_stat_df(file_dict:dict):
 def rename_original_img_files(img_info_df:pd.DataFrame,file_dict:dict,
                           save:bool=False,verbose:bool=False,is_panorama_img=False,
                           ignore_folders=IGNORE_FOLDERS):
-    # renames image files with original name returns number of renamed files
+    """ renames image files with original name returns number of renamed files """
     num_renamed=0
 
     # panoramic images have format
@@ -536,6 +535,7 @@ def delete_collateral_image_files(fp:str,exif_file_types=TYPE_JPG,verbose=False,
                                  do_not_process_files=DO_NOT_PROCESS_FILES,
                                  cleanup_filetypes=TYPE_CLEANUP,
                                  unnamed_file_columns=UNNAMED_FILE_COLUMNS):
+    """ removes any related files for a given image file """
 
     file_deletion_list=[]
     # get the file dictionary
@@ -545,7 +545,7 @@ def delete_collateral_image_files(fp:str,exif_file_types=TYPE_JPG,verbose=False,
     if verbose: print(f"#FOLDERS (TOTAL)                       : {len(filedict_df)}")
 
     # only get folders that contain JPG and a given folder level (do not consider files in subfolder)
-    filedict_df=filedict_df[(filedict_df["TYPE_JPG"]==True)&(filedict_df["level"]<=max_level)]
+    filedict_df=filedict_df[(filedict_df["TYPE_JPG"])&(filedict_df["level"]<=max_level)]
     num_jpg_only=len(filedict_df)
     filedict_df=filedict_df[filedict_df["NUM_HAS_METADATA"]>0]
     num_metadata=len(filedict_df)
@@ -577,10 +577,10 @@ def delete_collateral_image_files(fp:str,exif_file_types=TYPE_JPG,verbose=False,
         for f in files:
             f_name=f.stem+f.suffix
             # ignore file list
-            if (f_name) in do_not_process_files:
+            if f_name in do_not_process_files:
                 continue
             f_suffix=f.suffix[1:].lower()
-            if not (f_suffix in cleanup_filetypes):
+            if not f_suffix in cleanup_filetypes:
                 continue
             num_files_for_delete+=1
             if verbose: print(f"    * {f_name}")
@@ -592,7 +592,7 @@ def delete_collateral_image_files(fp:str,exif_file_types=TYPE_JPG,verbose=False,
 
     if delete:
         if (num_delete > 0) & prompt:
-            if input(f"Delete (y)?") == 'y':
+            if input("Delete (y)?") == 'y':
                 for f in file_deletion_list:
                     if os.path.isfile(f):
                         os.remove(f)
@@ -626,7 +626,7 @@ def delete_subfolders(fp_root:str,verbose=False,delete_folder_list=["metadata"],
         for f in files:
             if verbose: print(f"    * {f}")
             filetype=Path(f).suffix
-            if not filetype in filetypes:
+            if filetype not in filetypes:
                 filetypes.append(filetype)
         print(f"    FILETYPES: {filetypes} --")
 
@@ -642,11 +642,12 @@ def delete_subfolders(fp_root:str,verbose=False,delete_folder_list=["metadata"],
                 num_del+=1
         print(f"\ndeleted {num_del} folders")
     if not delete_folders:
-        print(f"NOTHING FOUND")
+        print("NOTHING FOUND")
 
     return delete_folders
 
 def program_found(program="exiftool.exe"):
+    """ checks if an executable can be found """
     program_which=shutil.which(program)
     if not program_which:
         print(f"Program {program} not found, check path")
@@ -669,7 +670,7 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
 
     def add_pano_fileinfo(f,d):
         regex=re.findall(REGEX_PANO,f)
-        if (len(regex)==1):
+        if len(regex)==1:
             d[regex[0]]={"panofile":f}
         return None
 
@@ -703,11 +704,11 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
 
         file_list=file_info.get("files",[])
         pano_file_dict={}
-        pano_files=[f for f in file_list if (Path(f).suffix[1:] in pano_filetypes)]
+        pano_files=[f for f in file_list if Path(f).suffix[1:] in pano_filetypes]
 
         # add to pano filedict
         [add_pano_fileinfo(f,pano_file_dict) for f in pano_files]
-        img_files=[f for f in file_list if (Path(f).suffix[1:] in jpg_filetypes)]
+        img_files=[f for f in file_list if Path(f).suffix[1:] in jpg_filetypes]
 
         # get a dictionary containing the list of files
         for img_file in img_files:
@@ -738,12 +739,12 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
         fp_img_dict[fp]=file_process_list
 
     if prompt & save:
-        if not (input("\nProceed (y)?")=="y"):
+        if not input("\nProceed (y)?")=="y":
             save=False
 
     # process metadata transfer
     print("\n### COPY METADATA ###")
-    cmd_s="_exiftool -all= test.jpg test2.jpg"
+    # cmd_s="_exiftool -all= test.jpg test2.jpg"
 
     # exiftool command to delete all metadata
     EXIFTOOL_DELETE="<EXIFTOOL> -all= <TO_FILES> -overwrite_original"
@@ -820,7 +821,8 @@ def exiftool_read_meta_recursive(fp_root=None,
     oscmd_shlex=shlex.split(os_cmd)
     process = subprocess.run(oscmd_shlex,
                              stdout=subprocess.PIPE,
-                             universal_newlines=False)
+                             universal_newlines=False,
+                             check=True)
 
     retcode=process.returncode
     if debug:
@@ -843,7 +845,7 @@ def exiftool_read_meta_recursive(fp_root=None,
             print("  - "+p)
         img_dict[p]=imginfo
 
-    os.chdir(fp_original)        
+    os.chdir(fp_original)
 
     return img_dict
 
@@ -873,14 +875,14 @@ def exiftool_get_descriptions(img_info_dict:dict):
 
 def exiftool_delete_metadata(fp,preview=True,exiftool="exiftool.exe",prompt=True,delete=True):
     """ removes all exif metadata for jpg files in path  """
-    fp_original=os.getcwd()    
+    fp_original=os.getcwd()
     if program_found(exiftool):
         cmd_exif_delete_all=CMD_EXIF_DELETE_ALL.replace("EXIFTOOL",exiftool)
     else:
         return -1
 
     if os.path.isdir(fp):
-       os.chdir(fp) 
+        os.chdir(fp)
     else:
         print(f"{fp} is not a directory, pls check")
         return -2
@@ -894,18 +896,19 @@ def exiftool_delete_metadata(fp,preview=True,exiftool="exiftool.exe",prompt=True
             s+="\n    "+desc.get("SpecialInstructions","")
             print(f" *  {f}\n    {s}")
 
-    if prompt==True and (input(f"\nDelete metadata for files in {fp} (y)")=="y"):
+    if prompt and (input(f"\nDelete metadata for files in {fp} (y)")=="y"):
         delete=True
 
     if delete:
         oscmd_shlex=shlex.split(cmd_exif_delete_all)
         process = subprocess.run(oscmd_shlex,
                                  stdout=subprocess.PIPE,
-                                 universal_newlines=False)
+                                 universal_newlines=False,
+                                 check=True)
         retcode=process.returncode
         stdout=process.stdout.decode("UTF-8")
 
-    print(f"EXIFTOOL [{cmd_exif_delete_all}], return Code: {retcode}\n{stdout}")        
+    print(f"EXIFTOOL [{cmd_exif_delete_all}], return Code: {retcode}\n{stdout}")
     os.chdir(fp_original)
     return retcode
 
@@ -924,21 +927,21 @@ def magick_resize(fp,magick="magick.exe",image_size=2000,
         save=True (save images)
         descriptions (True) create descriptions
         target_path = None (target path where to store images is fp isf None)
-        returns dict of images 
-    """ 
-    
+        returns dict of images
+    """
+
     if not program_found(magick):
         return {}
-    
+
     fp_original=os.getcwd()
-    
-    file_addition=str(image_size)+"px"    
+
+    file_addition=str(image_size)+"px"
     attributes=["_MAGICK","_IMAGESIZE","_QUALITY"]
     values=[magick,str(image_size),str(quality)]
     magick_resize=CMD_MAGICK_RESIZE
     for k,v in dict(zip(attributes,values)).items():
         magick_resize=magick_resize.replace(k,v)
-    
+
     if remove_metadata:
         magick_resize=magick_resize.replace("resize","thumbnail")
     print(f"*** MAGICK template: [{magick_resize}]")
@@ -946,9 +949,9 @@ def magick_resize(fp,magick="magick.exe",image_size=2000,
     # get files per path
     img_dict=exiftool_read_meta_recursive(fp,
              exif_attributes=EXIF_ATTRIBUTES_MINIMUM)
-    
-    img_dict={p:v for (p,v) in img_dict.items() if file_addition not in Path(p).stem }     
-    
+
+    img_dict={p:v for (p,v) in img_dict.items() if file_addition not in Path(p).stem }
+
     # get image descriptions
     if descriptions:
         img_descriptions_dict=exiftool_get_descriptions(img_dict)
@@ -956,23 +959,23 @@ def magick_resize(fp,magick="magick.exe",image_size=2000,
         for f,d in img_descriptions_dict.items():
             s_list.append(f+":\n")
             s_list.append(d+"\n")
-            
+
         if target_path:
             os.chdir(target_path)
         else:
             os.chdir(fp_original)
         print(f"    Write descriptions to {os.path.join(os.getcwd(),'descriptions.txt')}")
-        
-        with open('descriptions.txt', 'w') as file:          
+
+        with open('descriptions.txt', 'w') as file:
             file.writelines(s_list)
-    
+
     image_dict={}
-    for fp,img_info in img_dict.items():    
+    for fp,img_info in img_dict.items():
         p_img=str(Path(img_info["Directory"]).absolute())
         img_list=image_dict.get(p_img,[])
         img_list.append(img_info["FileName"])
-        image_dict[p_img]=img_list    
-    
+        image_dict[p_img]=img_list
+
 
     # do the changes for each folder
     for p,files in image_dict.items():
@@ -996,7 +999,7 @@ def magick_resize(fp,magick="magick.exe",image_size=2000,
             # print(file_out)
 
             magick_file_resize=magick_resize.replace("_FILE_IN",'"'+f+'"')
-            magick_file_resize=magick_file_resize.replace("_FILE_OUT",file_out)        
+            magick_file_resize=magick_file_resize.replace("_FILE_OUT",file_out)
             #print(f"    {magick_file_resize}")
             oscmd_shlex=shlex.split(magick_file_resize,posix=True)
             #print(oscmd_shlex)
@@ -1006,23 +1009,24 @@ def magick_resize(fp,magick="magick.exe",image_size=2000,
             if save:
                 process = subprocess.run(oscmd_shlex,
                                          stdout=subprocess.PIPE,
-                                         universal_newlines=False)
+                                         universal_newlines=False,
+                                         check=True)
                 retcode=process.returncode
-                stdout=process.stdout.decode("UTF-8")
+                # stdout=process.stdout.decode("UTF-8")
                 if retcode != 0:
                     print(f"Return code {retcode}, command {oscmd_shlex}")
-    os.chdir(fp_original)            
+    os.chdir(fp_original)
     return image_dict
 
 def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE,debug=False):
-    """ reads files using exiftool and returns a dictionary with path as key 
+    """ reads files using exiftool and returns a dictionary with path as key
         exif_template can be used to extract only a subset of attributes
-        NOTE: somehow exiftool doesn't parse all file types 
+        NOTE: somehow exiftool doesn't parse all file types
     """
-    img_dict=exiftool_read_meta_recursive(fp_root=fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE,                                              
+    img_dict=exiftool_read_meta_recursive(fp_root=fp,exif_template=exif_template,
                                                    debug=debug)
-    print(f"*** Read: {len(img_dict.keys())} files")    
-    
+    print(f"*** Read: {len(img_dict.keys())} files")
+
     p_root=Path(fp)
     num_root=len(p_root.parts)
     path_dict={}
@@ -1032,11 +1036,11 @@ def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE
         p_file=str(fp.name)
         p_suffix=fp.suffix[1:].lower()
 
-        path_info=path_dict.get(str(p_parent),{})    
-        # folder level        
+        path_info=path_dict.get(str(p_parent),{})
+        # folder level
         level=len(p_parent.parts)-num_root
 
-        path_info["level"]=level    
+        path_info["level"]=level
         path_filetypes=path_info.get("filetypes",{})
         path_num_files=path_filetypes.get(p_suffix,0)+1
         path_filetypes[p_suffix]=path_num_files
@@ -1045,21 +1049,21 @@ def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE
         # get date
         try:
             dt = datetime.strptime(f_info.get("DateTimeOriginal",""), "%Y:%m:%d %H:%M:%S")
-        except ValueError as e:
+        except ValueError:
             dt = datetime.now()
 
         dts=dt.strftime("%Y%m%d")
         f_info["Date"]=dts
         f_info["Filetype"]=p_suffix
         f_info["has_gps"]=(f_info.get("GPSLatitude",0)>0)
-        f_info["has_metadata"]=(len(f_info.get("Keywords",[]))>0)   
+        f_info["has_metadata"]=(len(f_info.get("Keywords",[]))>0)
 
         file_dict=path_info.get("file_dict",{})
         file_dict[p_file]=f_info
         path_info["file_dict"]=file_dict
-        path_dict[str(p_parent)]=path_info      
-    
-    if debug:   
+        path_dict[str(p_parent)]=path_info
+
+    if debug:
         print("\n")
         for p,p_info in path_dict.items():
             print(f"*** {p} {p_info['filetypes']}, level {p_info['level']}")
@@ -1074,27 +1078,27 @@ def exiftool_get_rename_dict(path_dict,max_level=1):
           if not, date prefix will tried to be retrieved from image metadata
         * max_level folders bigger than this level will be ignored
     """
-    
+
     # todays date as fallback
     d_today=datetime.now().strftime("%Y%m%d")
 
     num_renames=0
     rename_dict={}
-    
+
     for p,p_info in path_dict.items():
         dir_path=Path(p)
         pathname=dir_path.name
-        
+
         f_rename_list=[]
-           
+
         folder_level=p_info['level']
         if folder_level>max_level:
-            print(f"*** {p}")             
+            print(f"*** {p}")
             print(f"    folder level: {folder_level}, will be skipped")
-            continue                
-            
+            continue
+
         file_info=p_info.get("file_dict",{})
-        
+
         # check if older contains date prefix
         d_path=None
         re_path_date=re.search(REGEX_DATE_PREFIX,pathname)
@@ -1103,9 +1107,9 @@ def exiftool_get_rename_dict(path_dict,max_level=1):
 
         for f,f_info in file_info.items():
             f_new=f
-            # get regex matches 
+            # get regex matches
             regex_matches={regex_rule:re.findall(REGEX_RULE_DICT[regex_rule],f) for regex_rule in REGEX_RULE_DICT.keys()}
-            regex_matches={rule:regex_matches[rule] for rule in regex_matches.keys() if bool(regex_matches[rule])}                
+            regex_matches={rule:regex_matches[rule] for rule in regex_matches.keys() if bool(regex_matches[rule])}
             if bool(regex_matches):
                 rule_name_matched=list(regex_matches.keys())[0]
                 rule_matches=list(regex_matches.values())[0][0]
@@ -1120,32 +1124,32 @@ def exiftool_get_rename_dict(path_dict,max_level=1):
                 suffix=Path(f).suffix
                 # create new file name
                 if rule_name_matched=="REGEX_ORIGINAL_NAME":
-                    f_new+=rule_matches[1]            
+                    f_new+=rule_matches[1]
                 elif rule_name_matched=="REGEX_INSTAONEX":
                     f_new+=f[23:-(len(suffix))]
                 f_new+=suffix
             if not f==f_new:
                 num_renames+=1
                 #if debug:
-                #    print(f"    RENAME {(f+' |OLD'):>70} \n           {(f_new+' |NEW'):>70}")          
+                #    print(f"    RENAME {(f+' |OLD'):>70} \n           {(f_new+' |NEW'):>70}")
                 f_rename_list.append({"f_old":f,"f_new":f_new})
         if len(f_rename_list)>0:
             rename_dict[p]=f_rename_list
-    
+
     p_old=os.getcwd()
     num_renamed=0
     for p,file_list in rename_dict.items():
         #os.chdir(p)
         print(f"*** {p}")
         for f_rename_dict in file_list:
-            num_renamed+=1    
+            num_renamed+=1
             f_old=f_rename_dict["f_old"]
             f_new=f_rename_dict["f_new"]
-            print(f'    + {num_renamed:03d} {f_old}\n    |     {f_new}') 
-    print(f"*** NUMBER OF RENAMES: {num_renames}")    
+            print(f'    + {num_renamed:03d} {f_old}\n    |     {f_new}')
+    print(f"*** NUMBER OF RENAMES: {num_renames}")
     if num_renames==0:
-        print(f"    NO FILES FOR RENAME FOUND")   
-    
+        print("    NO FILES FOR RENAME FOUND")
+
     if num_renames>0 and (input("RENAME (y)? ")=="y"):
         num_renamed=0
         for p,file_list in rename_dict.items():
@@ -1154,16 +1158,16 @@ def exiftool_get_rename_dict(path_dict,max_level=1):
             else:
                 print(f"Path {p} doesn't exist (any more)")
                 continue
-                
+
             for f_rename_dict in file_list:
                 try:
                     os.rename(f_rename_dict["f_old"],f_rename_dict["f_new"])
-                    num_renamed+=1                  
+                    num_renamed+=1
                 except OSError as e:
                     print(p)
                     pf_old=os.path.join(p,f_rename_dict["f_old"])
                     print(f"Error renaming file {pf_old}: {e}")
-                  
-        print(f"\n>>> RENAMED {num_renamed} files")            
-    os.chdir(p_old);    
-    return rename_dict    
+
+        print(f"\n>>> RENAMED {num_renamed} files")
+    os.chdir(p_old)
+    return rename_dict
