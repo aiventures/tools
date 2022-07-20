@@ -1027,8 +1027,12 @@ def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE
                                                    debug=debug)
     print(f"*** Read: {len(img_dict.keys())} files")
 
-    p_root=Path(fp)
+    p_root=Path(fp).absolute();
     num_root=len(p_root.parts)
+
+    if debug:
+        print(f"    Path {p_root}, absolute folder level: {num_root}")
+
     path_dict={}
     for f,f_info in img_dict.items():
         fp=Path(f)
@@ -1038,6 +1042,7 @@ def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE
 
         path_info=path_dict.get(str(p_parent),{})
         # folder level
+
         level=len(p_parent.parts)-num_root
 
         path_info["level"]=level
@@ -1069,7 +1074,7 @@ def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE
             print(f"*** {p} {p_info['filetypes']}, level {p_info['level']}")
     return path_dict
 
-def exiftool_get_rename_dict(path_dict,max_level=1):
+def exiftool_rename_from_dict(path_dict,max_level=1):
     """ determines whether files should be renamed
         * input data is retrieved from exiftool_get_path_dict
         * checks whether not renamed image files are present
@@ -1087,6 +1092,7 @@ def exiftool_get_rename_dict(path_dict,max_level=1):
 
     for p,p_info in path_dict.items():
         dir_path=Path(p)
+
         pathname=dir_path.name
 
         f_rename_list=[]
