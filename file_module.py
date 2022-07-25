@@ -1,6 +1,9 @@
 """ module to read write some commonplace data """
 #from code import compile_command
 import os
+#import sys
+#import glob
+
 #import re
 #import shutil
 #from datetime import date
@@ -9,13 +12,19 @@ from pathlib import Path
 #import subprocess
 import json
 import traceback
+
+# https://superuser.com/questions/609447/how-to-install-the-win32com-python-library
+# pip install -U pypiwin32
+import win32com.client
+
 from tools import img_file_info_xls as img_info
 
 # functions to read file content
 displayfunctions_dict={"url":"get_url_from_link",
                        "txt":"read_txt_file",
                        "jpg":"get_img_metadata_exiftool",
-                       "json":"read_json"
+                       "json":"read_json",
+                       "lnk":"get_fileref_from_shortcut"
                       }
 exif_info={}
 
@@ -56,6 +65,8 @@ def read_json(filepath:str):
 
 def save_json(filepath,data:dict):
     """ Saves dictionary data as UTF8 """
+    # todo encode date time see
+    # https://stackoverflow.com/questions/11875770/how-to-overcome-datetime-datetime-not-json-serializable
 
     with open(filepath, 'w', encoding='utf-8') as json_file:
         try:
@@ -65,6 +76,14 @@ def save_json(filepath,data:dict):
             print(traceback.format_exc())
 
         return None
+
+def get_fileref_from_shortcut(f):
+    """ reads file location from windows shortcut
+        https://stackoverflow.com/questions/397125/reading-the-target-of-a-lnk-file-in-python
+    """
+    shell = win32com.client.Dispatch("WScript.Shell")
+    shortcut = shell.CreateShortCut(str(f))
+    return shortcut.Targetpath
 
 def get_url_from_link(f):
     """ reading url from windows link """
@@ -87,13 +106,15 @@ def read_file_info(fp,content=True,type_filters=[]):
     # read image metadata files
     if content:
         #read_exif=False
-        if (not bool(type_filters)) or ("jpg" in type_filters):
+        if (not bool(type_filters)) or ("jpg" in type_filters):            
             try:
-                exif_info=img_info.exiftool_read_meta_recursive(fp)
+                print("\nGETTING EXIF DATA")
+                exif_info=img_info.exiftool_read_meta_recursive(fp,debug=False)
             except Exception:
                 print("Exception reading exif files")
-                # print(traceback.format_exc())
+                #print(traceback.format_exc())
 
+    print("\nREADING FILES")
     # functions to decode
     for subpath,_,files in os.walk(fp):
         p_path=Path(subpath).absolute()
@@ -129,10 +150,10 @@ def print_file_info(file_info_dict):
         for filename,filedata in file_details.items():
             content=filedata.get("content",None)
             # print(f"open \"{os.path.join(p,filename)}\"  ({type(content)})")
-            print(f"open \"{os.path.join(p,filename)}\"")
+            print(f"FILE \"{os.path.join(p,filename)}\"")
             if not content is None:
                 try:
-                    print(str(content))
+                    print(f"  =>  {str(content)}")
                 except:
                     try:
                         print(str(content).encode('utf-8').decode('cp1252','ignore'))

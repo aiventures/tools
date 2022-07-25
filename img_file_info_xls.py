@@ -819,12 +819,17 @@ def exiftool_read_meta_recursive(fp_root=None,
         print(f"*** Path: {fp}")
         print("    "+ os_cmd)
     oscmd_shlex=shlex.split(os_cmd)
-    process = subprocess.run(oscmd_shlex,
-                             stdout=subprocess.PIPE,
-                             universal_newlines=False,
-                             check=True)
 
-    retcode=process.returncode
+    try:
+        process = subprocess.run(oscmd_shlex,
+                                 stdout=subprocess.PIPE,
+                                 universal_newlines=False,
+                                 check=True)
+        retcode=process.returncode    
+    except subprocess.CalledProcessError as e:
+        retcode=1
+        print(f"EXIFTOOL EXCEPTION OCCURED {e}") 
+
     if debug:
         print(f"    EXIFTOOL finished, return Code: {retcode}")
 
@@ -1027,7 +1032,7 @@ def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE
                                                    debug=debug)
     print(f"*** Read: {len(img_dict.keys())} files")
 
-    p_root=Path(fp).absolute();
+    p_root=Path(fp).absolute()
     num_root=len(p_root.parts)
 
     if debug:
