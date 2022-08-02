@@ -1079,7 +1079,7 @@ def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE
             print(f"*** {p} {p_info['filetypes']}, level {p_info['level']}")
     return path_dict
 
-def exiftool_rename_from_dict(path_dict,max_level=1):
+def exiftool_rename_from_dict(path_dict,max_level=1,ignore_suffixes=["tpl"]):
     """ determines whether files should be renamed
         * input data is retrieved from exiftool_get_path_dict
         * checks whether not renamed image files are present
@@ -1087,6 +1087,7 @@ def exiftool_rename_from_dict(path_dict,max_level=1):
         * if parent folder contains date as prefix it will be used
           if not, date prefix will tried to be retrieved from image metadata
         * max_level folders bigger than this level will be ignored
+        * ignore suffix: these files will be ignored
     """
 
     # todays date as fallback
@@ -1132,7 +1133,10 @@ def exiftool_rename_from_dict(path_dict,max_level=1):
                 else:
                     d=f_info.get("Date",d_today)
                     f_new=d+"_"+pathname+"_"
-                suffix=Path(f).suffix
+                suffix=Path(f).suffix                
+                if (suffix[1:] in ignore_suffixes):
+                    print(f"    {f} will be skipped (suffix ignored)")
+                    continue
                 # create new file name
                 if rule_name_matched=="REGEX_ORIGINAL_NAME":
                     f_new+=rule_matches[1]

@@ -92,6 +92,9 @@ def parse_content(content:list):
     alt_name+=content_dict.get("date_s","")
     alt_name=alt_name.replace(" ","_")
     alt_name=alt_name.replace(".","")
+    # special characters are dropped
+    alt_name=alt_name.replace("?","")
+    alt_name=alt_name.replace("!","")
     content_dict["alt_name"]=alt_name
     return content_dict
 
@@ -105,7 +108,7 @@ def rename_video_files(info_dict,debug=False,save=True,ignore_folders=[],ignore_
         if not os.path.isdir(p):
             continue
         path_parts=[p.lower() for p in Path(p).parts]
-        path_name=Path(p).name
+        path_name=Path(p).absolute().name
         skip_folder=[ignore_folder in path_part for path_part in path_parts for ignore_folder in ignore_folders ]
         skip_folder=any(skip_folder)
         if skip_folder:
@@ -136,6 +139,9 @@ def rename_video_files(info_dict,debug=False,save=True,ignore_folders=[],ignore_
             content=txt_info.get("content",[])
             rename_info_dict={}
             parsed_content=parse_content(content)
+            if parsed_content.get("alt_name",None):
+                alt_name=parsed_content["alt_name"]
+                parsed_content["alt_name"]=alt_name+"."+f_type
             rename_info_dict.update(parsed_content)
             #rename_info_dict["content"]=parsed_content
             rename_info_dict["old_name"]=f
@@ -177,7 +183,7 @@ def rename_video_files(info_dict,debug=False,save=True,ignore_folders=[],ignore_
                         print(f"#   {f} content:({len(content)}) ALREADY RENAMED")
                     rename_info_dict["old_name"]=f
                     if f!=name_new:
-                        rename_info_dict["new_name"]=name_new
+                        rename_info_dict["new_name"]=name_new                        
                         num_renames+=1
                     break
 
@@ -186,8 +192,7 @@ def rename_video_files(info_dict,debug=False,save=True,ignore_folders=[],ignore_
                 name_new=parsed_content.get("alt_name","")
                 if debug:
                     print(f"    No rule matched, use alt filename: {name_new}")
-                if name_new:
-                    name_new+="."+f_type
+                if name_new:                    
                     if f!=name_new:
                         rename_info_dict["new_name"]=name_new
                         num_renames+=1
