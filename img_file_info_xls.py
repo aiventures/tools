@@ -47,6 +47,9 @@ FILETYPE_CLASSES_DICT={"TYPE_RAW":TYPE_RAW,
 DO_NOT_PROCESS_FILES=["metadata.tpl","metadata_exif.tpl","default.geo"]
 IGNORE_FOLDERS=["insp","post"]
 
+# gets the first number sequence in file name = index ddddddddd_xx_yyyy_ddd_
+REGEX_FILE_NUMBER=r"^(\d+)?_.+?_(\d+)"
+
 # Regex for Date Prefix YYYYMMDD_
 REGEX_DATE_PREFIX=r"^(\d{8})_"
 # YYYYMMDD _  HHMMSS _ 00/10 _ NUM(3DIGITS)
@@ -57,6 +60,7 @@ REGEX_METADATA_FILES=r"(metadata.tpl|metadata_exif.tpl)"
 REGEX_RULE_DICT={"REGEX_INSTAONEX":REGEX_INSTAONEX,
                  "REGEX_ORIGINAL_NAME":REGEX_ORIGINAL_NAME,
                  "REGEX_METADATA_FILES":REGEX_METADATA_FILES}
+
 
 # dataframe columns that list number of unnamed filenames
 UNNAMED_FILE_COLUMNS=["REGEX_ORIGINAL_NAME","REGEX_INSTAONEX"]
@@ -86,11 +90,18 @@ EXIF_ATTRIBUTES_MINIMUM=["Directory","FileName",
                          "DateTime","DateTimeOriginal"]
 
 # EXIFTOOL commands
+
+# delete all metadata recursively
 CMD_EXIF_DELETE_ALL='EXIFTOOL -all= -r * -ext jpg'
+
+# exiftool command to copoy over metadata from one file to the other
+CMD_EXIF_COPY_SINGLE='EXIFTOOL -TagsFromFile SRC_FILE "-all:all>all:all" TRG_FILE'
+
+# read all metadata recursively for jpg files
 CMD_EXIF_READ_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -charset latin -s -r -Directory * -ext jpg'
 # CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -L -s -r -Directory * -ext jpg -ext arw -ext tif'
+# read all metadata recursively for image files
 CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -L -s -r -n -Directory *'
-
 
 # MAGICK commands
 CMD_MAGICK_RESIZE="_MAGICK convert _FILE_IN -resize _IMAGESIZEx -quality _QUALITY _FILE_OUT"
@@ -825,10 +836,10 @@ def exiftool_read_meta_recursive(fp_root=None,
                                  stdout=subprocess.PIPE,
                                  universal_newlines=False,
                                  check=True)
-        retcode=process.returncode    
+        retcode=process.returncode
     except subprocess.CalledProcessError as e:
         retcode=1
-        print(f"EXIFTOOL EXCEPTION OCCURED {e}") 
+        print(f"EXIFTOOL EXCEPTION OCCURED {e}")
 
     if debug:
         print(f"    EXIFTOOL finished, return Code: {retcode}")
@@ -1065,7 +1076,10 @@ def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE
         dts=dt.strftime("%Y%m%d")
         f_info["Date"]=dts
         f_info["Filetype"]=p_suffix
-        f_info["has_gps"]=(f_info.get("GPSLatitude",0)>0)
+        try:
+            f_info["has_gps"]=(float(f_info.get("GPSLatitude",0.))>0)
+        except ValueError:
+            f_info["has_gps"]=False
         f_info["has_metadata"]=(len(f_info.get("Keywords",[]))>0)
 
         file_dict=path_info.get("file_dict",{})
@@ -1133,7 +1147,7 @@ def exiftool_rename_from_dict(path_dict,max_level=1,ignore_suffixes=["tpl"]):
                 else:
                     d=f_info.get("Date",d_today)
                     f_new=d+"_"+pathname+"_"
-                suffix=Path(f).suffix                
+                suffix=Path(f).suffix
                 if (suffix[1:] in ignore_suffixes):
                     print(f"    {f} will be skipped (suffix ignored)")
                     continue
@@ -1186,3 +1200,122 @@ def exiftool_rename_from_dict(path_dict,max_level=1,ignore_suffixes=["tpl"]):
         print(f"\n>>> RENAMED {num_renamed} files")
     os.chdir(p_old)
     return rename_dict
+
+def run_cmd(os_cmd:str,debug=True):
+    """ runs a command line command """
+    oscmd_shlex=shlex.split(os_cmd)
+    try:
+        process = subprocess.run(oscmd_shlex,
+                                 stdout=subprocess.PIPE,
+                                 universal_newlines=False,
+                                 check=True)
+        retcode=process.returncode
+    except subprocess.CalledProcessError as e:
+        retcode=1
+        print(f"EXIFTOOL EXCEPTION OCCURED {e}")
+
+    if debug:
+        print(f"CMD {os_cmd} [{retcode}]")
+
+    return retcode
+
+def copy_metadata(copy_dict:dict,display=True,save=False,exiftool="exiftool.exe",debug=True):
+    """ perform/display metadata copy operations, returns number of renamed files """
+
+    # check exiftool executable
+    exiftool_used=program_found(exiftool)
+
+    if exiftool_used:
+        print(f"\nCopy Metadata Using EXIFTOOL {exiftool_used}")
+        cmd_exiftool=CMD_EXIF_COPY_SINGLE.replace("EXIFTOOL",exiftool)
+    else:
+        return -1
+
+    num_files=0
+    fp_old=os.getcwd()
+    if display:
+        print("\n### COPY METADATA ###")
+    for fp,copy_dict in copy_dict.items():
+        os.chdir(fp)
+        print(f"\n** PATH: {fp}")
+        for file_group,file_info in copy_dict.items():
+            source_files=file_info.get("source_files",[])
+            target_files=file_info.get("target_files",[])
+
+            # skip if there is nothing to copy
+            if not (target_files and source_files ):
+                print(f"   ({len(source_files)}) target files , ({len(target_files)}) source files for file group {file_group}, skip")
+                continue
+
+            # use only the first matching item
+            if source_files:
+                source_file=source_files[0]
+            else:
+                if display:
+                    print(f"?  No metadata source files found for file group {file_group}")
+                continue
+            if display:
+                print(f"-  {source_file} (SOURCE)")
+            for target_file in target_files:
+                num_files+=1
+                if display:
+                    print(f"   ({str(num_files).zfill(2)}) -> {target_file} ")
+
+                if save:
+                    cmd_copy_metadata=cmd_exiftool.replace("SRC_FILE",'"'+source_file+'"')
+                    cmd_copy_metadata=cmd_copy_metadata.replace("TRG_FILE",'"'+target_file+'"')
+                    ret_code=run_cmd(cmd_copy_metadata,debug=debug)
+                    if not ret_code == 0:
+                        num_files -= 1
+
+    print(f"\n### COPYING METADATA FOR {num_files} FILES")
+    os.chdir(fp_old)
+    return num_files
+
+def get_copy_dict(metadata_dict,marker_exif_attributes=["Model"],filename_signatures=[],debug=True):
+    """ returns a dict of items  based on metadata dictionary read with exiftool_get_path_dict """
+
+    copy_dict={}
+
+    if debug:
+        print(f"EXIF     MARKERS: '{marker_exif_attributes}'")
+        print(f"FILENAME MARKERS: '{filename_signatures}'")
+
+    for fp,path_dict in metadata_dict.items():
+        if debug:
+            print(f"\nPATH: {fp}")
+        file_dict=path_dict["file_dict"]
+        # get files belonging to file name accoording to same index signature
+        file_groups_dict={}
+        for f,file_info in file_dict.items():
+            contains_metadata=False
+            if marker_exif_attributes:
+                contains_metadata=[file_info.get(att,"") for att in marker_exif_attributes]
+                contains_metadata=all([bool(att) for att in contains_metadata])
+
+            contains_filename_signature=any([sig.lower() in f.lower() for sig in filename_signatures])
+            is_source_file=any([contains_metadata,contains_filename_signature])
+
+            if debug:
+                print(f"-  {f} METADATA: {contains_metadata}, FILENAME: {contains_filename_signature}, SOURCE: {is_source_file}")
+
+            # check whether file contains metadata based on
+            re_file_number=re.findall(REGEX_FILE_NUMBER,f)
+            # print(re_file_number)
+            if re_file_number:
+                re_file_number=re_file_number[0]
+                if len(re_file_number)==2:
+                    file_number=re_file_number[1]
+                    #print(file_number)
+                    # add filename to file group list
+                    file_group_dict=file_groups_dict.get(file_number,{})
+                    if is_source_file:
+                        file_list_name="source_files"
+                    else:
+                        file_list_name="target_files"
+                    file_list=file_group_dict.get(file_list_name,[])
+                    file_list.append(f)
+                    file_group_dict[file_list_name]=file_list
+                    file_groups_dict[file_number]=file_group_dict
+        copy_dict[fp]=file_groups_dict
+    return copy_dict
