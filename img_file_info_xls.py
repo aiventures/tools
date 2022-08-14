@@ -1382,7 +1382,7 @@ def move_manual_images(fp=None,fp_dict_in=None,debug=False,save=False):
         path_dict=fp_dict_in
 
     if not path_dict:
-        print("No Path Info give")
+        print("No Path Info given")
         return -1
 
     # files to move
