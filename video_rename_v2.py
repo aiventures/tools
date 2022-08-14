@@ -19,13 +19,16 @@ REGEX_TXT_URL_SERIES_EPISODE=re.compile(REGEX_TXT_URL_SERIES_EPISODE_S,re.IGNORE
 REGEX_DICT["REGEX_TXT_URL_SERIES_EPISODE"]={"type":REGEX_TYPE_TEXT,
                                             "regex":REGEX_TXT_URL_SERIES_EPISODE,
                                             "function":"get_series_episode"}
-
+                                          
 # regex to filter out (S##/E##) or (S##_E##) or (##_##) or (##/##)
 REGEX_TXT_SERIES_EPISODE_S=r".+?\([S]?(\d+)[\/_][E]?(\d+)\)"
 REGEX_TXT_SERIES_EPISODE=re.compile(REGEX_TXT_SERIES_EPISODE_S,re.IGNORECASE)
 REGEX_DICT["REGEX_TXT_SERIES_EPISODE"]={"type":REGEX_TYPE_TEXT,
                                         "regex":REGEX_TXT_SERIES_EPISODE,
                                         "function":"get_series_episode"}
+REGEX_DICT["REGEX_FILE_SERIES_EPISODE"]={"type":REGEX_TYPE_FILENAME,
+                                        "regex":REGEX_TXT_SERIES_EPISODE,
+                                        "function":"get_series_episode"}                                        
 
 # looks for (#s#_#s_total#) signature in a file name
 REGEX_FILE_PARENTHESES_S=r".+?\((\d+)[_\/](\d+)\)"
@@ -33,6 +36,7 @@ REGEX_FILE_PARENTHESES=re.compile(REGEX_FILE_PARENTHESES_S,re.IGNORECASE)
 REGEX_DICT["REGEX_FILE_PARENTHESES"]={"type":REGEX_TYPE_FILENAME,
                                             "regex":REGEX_FILE_PARENTHESES,
                                             "function":"get_series"}
+
 
 # functions to return Episode and Series number
 def get_series_episode(regex_result):
@@ -118,6 +122,8 @@ def rename_video_files(info_dict,debug=False,save=True,ignore_folders=[],ignore_
         file_dict=p_info["file_details"]
         rename_info={}
         for f,f_info in file_dict.items():
+            if debug:
+                print(f"File {f}")
 
             if any([f_ignore in f for f_ignore in ignore_files]):
                 print(f"SKIP FILE '{f}', ignore files: {ignore_files}")
@@ -149,7 +155,7 @@ def rename_video_files(info_dict,debug=False,save=True,ignore_folders=[],ignore_
             # now go through all available regexes
             series_episode=None
             name_new=""
-            for regex_rule,regex_info in REGEX_DICT.items():
+            for regex_rule,regex_info in REGEX_DICT.items():  
                 # get regex rule and function to extract episode and
                 regex=regex_info["regex"]
                 function=regex_info["function"]
@@ -157,14 +163,14 @@ def rename_video_files(info_dict,debug=False,save=True,ignore_folders=[],ignore_
                 #rename_dict
                 if regex_info["type"] == REGEX_TYPE_FILENAME:
                     regex_match=regex.findall(f_stem)
-                    if regex_match:
+                    if regex_match:                                            
                         series_episode=globals()[function](regex_match)
                 elif regex_info["type"] == REGEX_TYPE_TEXT and content:
                     for line in content:
                         regex_match=regex.findall(line)
-                        if regex_match:
+                        if regex_match:                               
                             series_episode=globals()[function](regex_match)
-                            break
+                            break                        
                 if series_episode:
                     name_new="S"+series_episode[0]+"E"+series_episode[1]+"_"+path_name+"."+f_type
 
@@ -188,6 +194,9 @@ def rename_video_files(info_dict,debug=False,save=True,ignore_folders=[],ignore_
                     break
 
             # no regex rules found replace by content/alt name if it is there
+            if debug and not name_new:
+                print("No rename rule was found")
+
             if (not name_new) and parsed_content:
                 name_new=parsed_content.get("alt_name","")
                 if debug:

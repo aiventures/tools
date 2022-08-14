@@ -61,6 +61,11 @@ REGEX_RULE_DICT={"REGEX_INSTAONEX":REGEX_INSTAONEX,
                  "REGEX_ORIGINAL_NAME":REGEX_ORIGINAL_NAME,
                  "REGEX_METADATA_FILES":REGEX_METADATA_FILES}
 
+# regex to identify regular renamed image pattern
+# is used for moving images of manual lenses to a target folder
+REGEX_FILENAME_IMG_S=r"^(\d{8})_(\w+)_(.+)?_(\d+)"
+REGEX_FILENAME_IMG=re.compile(REGEX_FILENAME_IMG_S,re.I)
+SUFFIX_MANUAL="_manual"
 
 # dataframe columns that list number of unnamed filenames
 UNNAMED_FILE_COLUMNS=["REGEX_ORIGINAL_NAME","REGEX_INSTAONEX"]
@@ -91,14 +96,21 @@ EXIF_ATTRIBUTES_MINIMUM=["Directory","FileName",
 
 # EXIFTOOL commands
 
+# exif attributes for (manual) lenses
+EXIF_LENS_LENSBABY_TRIO={"lensmodel":"Lensbaby Trio 28mm","fnumber":"3.5","focallength":"28"}
+
+# change single attributes for target (directory or file(s) )
+CMD_EXIF_CHANGE_ATTRIBUTES='EXIFTOOL EXIF_ATTRIBUTES TARGET'
+
 # delete all metadata recursively
 CMD_EXIF_DELETE_ALL='EXIFTOOL -all= -r * -ext jpg'
 
-# exiftool command to copoy over metadata from one file to the other
+# exiftool command to copy over metadata from one file to the other
 CMD_EXIF_COPY_SINGLE='EXIFTOOL -TagsFromFile SRC_FILE "-all:all>all:all" TRG_FILE'
 
 # read all metadata recursively for jpg files
 CMD_EXIF_READ_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -charset latin -s -r -Directory * -ext jpg'
+
 # CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -L -s -r -Directory * -ext jpg -ext arw -ext tif'
 # read all metadata recursively for image files
 CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -L -s -r -n -Directory *'
@@ -165,7 +177,6 @@ def save_exif_attributes(filepath,attribute_list:list):
                 print(traceback.format_exc())
                 #s = "No data was saved"
     return None
-
 
 def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,
              include_entropy=False,debug=False,include_app=False):
@@ -558,7 +569,13 @@ def delete_collateral_image_files(fp:str,exif_file_types=TYPE_JPG,verbose=False,
     # only get folders that contain JPG and a given folder level (do not consider files in subfolder)
     filedict_df=filedict_df[(filedict_df["TYPE_JPG"])&(filedict_df["level"]<=max_level)]
     num_jpg_only=len(filedict_df)
-    filedict_df=filedict_df[filedict_df["NUM_HAS_METADATA"]>0]
+
+    if 'NUM_HAS_METADATA' in filedict_df.columns:
+        filedict_df=filedict_df[filedict_df["NUM_HAS_METADATA"]>0]
+    else:
+        print("# NO FILES WITH METADATA FOUND")
+        return []
+
     num_metadata=len(filedict_df)
     columns=filedict_df.columns
 
@@ -844,7 +861,7 @@ def exiftool_read_meta_recursive(fp_root=None,
     if debug:
         print(f"    EXIFTOOL finished, return Code: {retcode}")
 
-    if not retcode==0:
+    if retcode!=0:
         return {}
 
     # get data as dictionary
@@ -1219,6 +1236,40 @@ def run_cmd(os_cmd:str,debug=True):
 
     return retcode
 
+def change_metadata(target,exif_attribute_dict=EXIF_LENS_LENSBABY_TRIO,save=True,exiftool="exiftool.exe",debug=True):
+    """ change / replace metadata / useful for manual lenses
+        target should be a single file list of files or a directory
+    """
+
+    # check exiftool executable
+    exiftool_used=program_found(exiftool)
+    cmd_exif=CMD_EXIF_CHANGE_ATTRIBUTES
+
+    if exiftool_used:
+        print(f"\nCopy Metadata Using EXIFTOOL {exiftool_used}")
+        cmd_exif=cmd_exif.replace("EXIFTOOL",exiftool)
+    else:
+        return -1
+
+    if isinstance(target,list):
+        target=['"'+t+'"' for t in target]
+        target=" ".join(target)
+    else:
+        target='"'+target+'"'
+
+    exif_attributes=[]
+    for exif_attribute,value in exif_attribute_dict.items():
+        attribute='-'+exif_attribute+'="'+value+'"'
+        exif_attributes.append(attribute)
+
+    cmd_exif=cmd_exif.replace("EXIF_ATTRIBUTES"," ".join(exif_attributes))
+    cmd_exif=cmd_exif.replace("TARGET",target)
+    ret_code=0
+    if save:
+        ret_code=run_cmd(os_cmd=cmd_exif,debug=debug)
+
+    return ret_code
+
 def copy_metadata(copy_dict:dict,display=True,save=False,exiftool="exiftool.exe",debug=True):
     """ perform/display metadata copy operations, returns number of renamed files """
 
@@ -1319,3 +1370,80 @@ def get_copy_dict(metadata_dict,marker_exif_attributes=["Model"],filename_signat
                     file_groups_dict[file_number]=file_group_dict
         copy_dict[fp]=file_groups_dict
     return copy_dict
+
+def move_manual_images(fp=None,fp_dict_in=None,debug=False,save=False):
+    """ moves manual images (=flocal length exif is 0) to a target folder
+        returns number of moved files
+    """
+    path_dict=None
+    if isinstance(fp,str) and os.path.isdir(fp):
+        path_dict=exiftool_get_path_dict(fp,debug=debug)
+    elif isinstance(fp_dict_in,dict):
+        path_dict=fp_dict_in
+
+    if not path_dict:
+        print("No Path Info give")
+        return -1
+
+    # files to move
+    f_move_list=[]
+    create_dirs=[]
+    num_moved=0
+    for p,p_info in path_dict.items():
+        p_current=Path(p).absolute()
+        p_root=os.path.join(*p_current.parts[:-1])
+
+        # do not move if current directory already has manual suffic
+        if (p_current.name).endswith(SUFFIX_MANUAL):
+            continue
+
+        p_new_default=p_current.name+SUFFIX_MANUAL
+
+        print(f"*** Path {p}")
+        file_dict=p_info.get("file_dict",{})
+        for f,f_info in file_dict.items():
+            is_manual=(f_info.get("FocalLength",0)==0)
+            if is_manual:
+                print(f"-   {f} FROM MANUAL LENS")
+                # search for directory pattern
+                regex_filename_img=REGEX_FILENAME_IMG.findall(f)
+                p_new=p_new_default
+                if regex_filename_img:
+                    regex_filename_img=regex_filename_img[0]
+                    p_new="_".join([regex_filename_img[0],"M",regex_filename_img[2]])
+
+                # check if moving is required at all
+                if p_new == p_current.name:
+                    if debug:
+                        print(f"    File {f} already in target path {str(p_current)}")
+                    continue
+                p_new=os.path.join(p_root,p_new)
+                if debug:
+                    print(f"    TARGET FOLDER {p_new}")
+
+                file_from=os.path.join(p_current,f)
+                file_to=os.path.join(p_new,f)
+                f_move_list.append({"file_from":file_from,"file_to":file_to})
+                create_dirs.append(p_new)
+
+    # clean up duplicates from create dirs / create new dirs
+    create_dirs=list(dict.fromkeys(create_dirs))
+    create_dirs=[create_dir for create_dir in create_dirs if not os.path.isdir(create_dir)]
+    for create_dir in create_dirs:
+        if save:
+            os.mkdir(create_dir)
+        if debug:
+            print(f"-   Create dir: {create_dir}")
+
+    for f_move in f_move_list:
+        if debug:
+            f_from=Path(f_move["file_from"]).name
+            print(f"-   Move file: {f_from} ")
+        if save:
+            try:
+                shutil.move(f_move["file_from"],f_move["file_to"])
+                num_moved+=1
+            except FileNotFoundError as e:
+                print(e)
+    print(f"*** {num_moved} files were moved to {str(len(create_dirs))} new directories")
+    return num_moved
