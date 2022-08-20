@@ -1142,7 +1142,7 @@ def exiftool_rename_from_dict(path_dict,max_level=1,ignore_suffixes=["tpl"]):
 
         file_info=p_info.get("file_dict",{})
 
-        # check if older contains date prefix
+        # check if folder contains date prefix
         d_path=None
         re_path_date=re.search(REGEX_DATE_PREFIX,pathname)
         if re_path_date:
@@ -1163,7 +1163,7 @@ def exiftool_rename_from_dict(path_dict,max_level=1,ignore_suffixes=["tpl"]):
                     f_new=pathname+"_"
                 else:
                     d=f_info.get("Date",d_today)
-                    f_new=d+"_"+pathname+"_"
+                    f_new=d+"_S_"+pathname+"_"
                 suffix=Path(f).suffix
                 if (suffix[1:] in ignore_suffixes):
                     print(f"    {f} will be skipped (suffix ignored)")
