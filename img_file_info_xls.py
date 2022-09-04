@@ -1051,7 +1051,7 @@ def magick_resize(fp,magick="magick.exe",image_size=2000,
     os.chdir(fp_original)
     return image_dict
 
-def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE,debug=False):
+def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE,suffix_list=[],debug=False):
     """ reads files using exiftool and returns a dictionary with path as key
         exif_template can be used to extract only a subset of attributes
         NOTE: somehow exiftool doesn't parse all file types
@@ -1072,6 +1072,10 @@ def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE
         p_parent=fp.parent
         p_file=str(fp.name)
         p_suffix=fp.suffix[1:].lower()
+        # check if file needs to be checked
+        if suffix_list:
+            if not p_suffix in suffix_list:
+                continue
 
         path_info=path_dict.get(str(p_parent),{})
         # folder level
@@ -1344,7 +1348,7 @@ def get_copy_dict(metadata_dict,marker_exif_attributes=["Model"],filename_signat
                 contains_metadata=[file_info.get(att,"") for att in marker_exif_attributes]
                 contains_metadata=all([bool(att) for att in contains_metadata])
 
-            contains_filename_signature=any([sig.lower() in f.lower() for sig in filename_signatures])
+            contains_filename_signature=any([sig.lower() in f.lower() for sig in filename_signatures])           
             is_source_file=any([contains_metadata,contains_filename_signature])
 
             if debug:
