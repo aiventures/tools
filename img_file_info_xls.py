@@ -11,8 +11,17 @@ import shlex
 import shutil
 import subprocess
 import traceback
-from datetime import date, datetime
+import datetime
+from datetime import datetime as dt_module
+from datetime import date
 from pathlib import Path
+from bs4 import BeautifulSoup as bs
+import lxml.etree as etree
+import pytz
+from pytz import timezone
+
+URL_OSM="https://www.openstreetmap.org/#map=16/lat/lon"
+
 
 import pandas as pd
 from PIL import Image, UnidentifiedImageError
@@ -22,7 +31,7 @@ from PIL.ExifTags import TAGS
 EXIF_FIELDS=["Software","Copyright","Make","Model","LensModel",
                  "FocalLength","FocalLengthIn35mmFilm","FNumber","ISOSpeedRatings","GPSInfo",
                  "DateTime","DateTimeOriginal","ExifImageHeight",
-                 "ExifImageWidth","ImageDescription"]
+                 "ExifImageWidth","ImageDescription","PictureEffect","PictureProfile"]
 
 SOFTWARE_DXO="DxO"
 SOFTWARE_INSTA="Insta360 one x2"
@@ -84,7 +93,8 @@ EXIF_ATTRIBUTES=["Directory","FileName","FileSize#","DateCreated",
                  "SpecialInstructions",
                  "GPSLatitude","GPSLatitudeRef",
                  "GPSLongitude","GPSLongitudeRef",
-                 "GPSPosition","Keywords","DateTime","DateTimeOriginal"]
+                 "GPSPosition","Keywords","DateTime","DateTimeOriginal",
+                 "PictureEffect","PictureProfile"]
 
 EXIF_ATTRIBUTES_MINIMUM=["Directory","FileName",
                          "Title","Make","Model","LensModel",
@@ -92,7 +102,8 @@ EXIF_ATTRIBUTES_MINIMUM=["Directory","FileName",
                          "Aperture","ISO",
                          "LightValue","Software",
                          "SpecialInstructions",
-                         "DateTime","DateTimeOriginal"]
+                         "DateTime","DateTimeOriginal",
+                         "PictureEffect","PictureProfile"]
 
 # EXIFTOOL commands
 
@@ -114,6 +125,9 @@ CMD_EXIF_READ_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -charset
 # CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -L -s -r -Directory * -ext jpg -ext arw -ext tif'
 # read all metadata recursively for image files
 CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -L -s -r -n -Directory *'
+
+# CMD EXIFTOOL COMMAND TO COPY GPS CORDINATES from '
+EXIFTOOL_GPS='EXIFTOOL -geosync=TIME_OFFSET -geotag "*.LOGTYPE" "*.FILETYPE"'
 
 # MAGICK commands
 CMD_MAGICK_RESIZE="_MAGICK convert _FILE_IN -resize _IMAGESIZEx -quality _QUALITY _FILE_OUT"
@@ -892,19 +906,72 @@ def exiftool_get_descriptions(img_info_dict:dict):
         if img_info.get("Make",None):s+=img_info["Make"]
         if img_info.get("Model",None):s+=" "+img_info["Model"]
         if img_info.get("LensModel",None): s+="|"+img_info["LensModel"]
-        if img_info.get("FocalLength",None): s+=" "+img_info["FocalLength"]
-        if img_info.get("ShutterSpeed",None): s+=" "+img_info["ShutterSpeed"]+"s"
+        if img_info.get("FocalLength",None): s+=" "+str(img_info["FocalLength"])
+        if img_info.get("ShutterSpeed",None): s+=" "+str(img_info["ShutterSpeed"])+"s"
         if img_info.get("Aperture",None): s+=" F"+str(img_info["Aperture"])
         if img_info.get("ISO",None): s+=" ISO"+str(img_info["ISO"])
         if img_info.get("LightValue",None): s+=", "+str(img_info["LightValue"])+"LV"
         if img_info.get("Software",None): s+=", Software: "+img_info["Software"]
         s+="]"
-        if img_info.get("SpecialInstructions",None): s+=" Geolink: "+img_info["SpecialInstructions"]
+        if img_info.get("PictureEffect",None): s+="\nPicture Effect: "+img_info["PictureEffect"]+" "
+        if img_info.get("PictureProfile",None): s+="(Profile: "+img_info["PictureProfile"]+")"
+
+        if img_info.get("SpecialInstructions",None): s+="\nGeolink: "+img_info["SpecialInstructions"]
+
         imginfo_description_dict[str(fp)]=s
         img_info["Description"]=s+"]"
 
     # return img_info_dict
     return imginfo_description_dict
+
+def duration_as_string(duration:int)->str:
+    """ transform integer into duration string """
+    hh=duration//3600
+    mm=(duration-(hh*3600))//60
+    ss=duration-(hh*3600)-(mm*60)
+    time_s=str(hh).zfill(2)+":"+str(mm).zfill(2)+":"+str(ss).zfill(2)
+    if duration>=0:
+        time_s="+"+time_s
+    else:
+        time_s="-"+time_s
+    return time_s
+
+def exiftool_write_gps(fp:str=None,ts_gps:str=None,img_gps_name="GPS",
+                       exiftool:str="exiftool.exe",tz_code:str="Europe/Berlin",
+                       log_filetype:str="gpx",img_filetype:str="jpg",
+                       prompt:bool=True):
+    """ write GPS coordinates from log using EXIFTOOL in current directory
+
+        htps://exiftool.org/geotag.html#TP1
+        https://exiftool.org/geotag.html
+        GPS display reads   19:32:21 UTC and 
+        DateTimeOriginal is 14:31:49 (TIMEZONE -5:00 UTC) then for this image the 
+        UTC                 19:31:49 (TIMEZONE -5:00 UTC) then for this image the 
+        camera clock was 32 seconds slow (assuming that the timezone of the camera clock was -05:00). 
+        A) Use the Geosync tag to specify the time difference while geotagging. 
+        Using this technique the existing image timestamps will not be corrected, 
+        but the GPSTimeStamp tag created by the geotagging process will contain the correct GPS time:
+        exiftool -geosync=+00:00:32 -geotag my_gps.log C:\Images
+        DateTimeOriginal (CAM)>  UTC_CAM + OFFSET = UTC_GPS > OFFSET = UTC_GPS - UTC_CAM
+        exiftool -geosync=+00:00:32 -geotag "logs/*.log" "C:\Images"
+
+        Arguments:
+            varname ():
+            ts_gps (str): GPS datetime string (Format: YYYY-MM-DD HH:MM:SS)
+            img_gps_name (str): Image Filename Marker (eg use "GPS" to read DateTime from an Image named "MyLogGPS.jpg" )
+            exiftool (str): Location of Exiftool
+            tz_code (str): Timezone Code of images (Default "Europe/Berlin")
+            log_filetype: Filetype extension (default gpx)
+            img_filetype: Image filetype (default jpg)
+            prompt (bool): ask before execution
+        Returns:
+            type: Error code from EXIFTOOL
+    """
+
+    # CMD EXIFTOOL COMMAND TO COPY GPS CORDINATES from '
+    EXIFTOOL_GPS='EXIFTOOL -geosync=TIME_OFFSET -geotag "*.LOGTYPE" "*.FILETYPE"'
+    # code is contained in jupyter file from October 2022
+    # pass    
 
 def exiftool_delete_metadata(fp,preview=True,exiftool="exiftool.exe",prompt=True,delete=True):
     """ removes all exif metadata for jpg files in path  """
@@ -1090,9 +1157,9 @@ def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE
 
         # get date
         try:
-            dt = datetime.strptime(f_info.get("DateTimeOriginal",""), "%Y:%m:%d %H:%M:%S")
+            dt = dt_module.strptime(f_info.get("DateTimeOriginal",""), "%Y:%m:%d %H:%M:%S")
         except ValueError:
-            dt = datetime.now()
+            dt = dt_module.now()
 
         dts=dt.strftime("%Y%m%d")
         f_info["Date"]=dts
@@ -1126,7 +1193,7 @@ def exiftool_rename_from_dict(path_dict,max_level=1,ignore_suffixes=["tpl"]):
     """
 
     # todays date as fallback
-    d_today=datetime.now().strftime("%Y%m%d")
+    d_today=dt_module.now().strftime("%Y%m%d")
 
     num_renames=0
     rename_dict={}
@@ -1451,3 +1518,63 @@ def move_manual_images(fp=None,fp_dict_in=None,debug=False,save=False):
                 print(e)
     print(f"*** {num_moved} files were moved to {str(len(create_dirs))} new directories")
     return num_moved
+
+def get_waypoints(fp,show=False,tz_code="Europe/Berlin"):
+    """ Extracts waypoints from waypoint log 
+        Arguments:
+            fp (str): File Path to waypoint
+            show (bool): show details
+            tzcode (pytz.tzcode): Valid pytz timzone code 
+        Returns:
+            dict: dictionary containing waypoints and dates and links to osm
+    
+    """
+    
+    timezone_loc = pytz.timezone(tz_code)
+    timezone_utc = pytz.utc
+
+    waypoint_dict={}
+    content=[]
+    
+    with open(fp, "r") as file:
+        content = file.readlines()
+        content = "".join(content)
+        bs_content = bs(content, "lxml")
+    
+    if show:
+        print(f"--- READ FILE {fp}---")
+        print(bs_content.prettify())
+
+    i = 0
+    
+    waypoints=bs_content.find_all("wpt")
+    
+    if show:
+        print(f"\n*** <{len(waypoints)}> Waypoints found")
+    
+    for wp in waypoints:
+        try:
+            lat=wp["lat"]
+            lon=wp["lon"]
+            ts=wp.find("time").text            
+            # timezone conversion            
+            dt = datetime.datetime.strptime(ts,'%Y-%m-%dT%H:%M:%SZ')
+            dt_utc = dt.replace(tzinfo=timezone_utc)            
+            dt_local=dt_utc.astimezone(timezone_loc)                        
+            i+=1
+            url_osm=URL_OSM
+            url_osm=url_osm.replace("lat",lat)
+            url_osm=url_osm.replace("lon",lon)
+            waypoint_dict[i]={"lat":lat,"lon":lon,
+                              "datetime_utc":dt_utc.strftime("%Y:%m:%d %H:%M:%S"),
+                              "datetime_local":dt_local.strftime("%Y:%m:%d %H:%M:%S"),
+                              "timezone":tz_code,
+                              "url_osm":url_osm
+                              }
+            if show:
+                print(f'({str(i)}) {waypoint_dict[i]["datetime_local"]} {waypoint_dict[i]["url_osm"]}')
+        except KeyError as e:
+            print(f"Key {e} doesn't exist" )        
+            continue
+            
+    return waypoint_dict        
