@@ -1,8 +1,17 @@
 """ reads image files from a subfolder and returns a report of
-    what needs to be done with images
+    what needs to be done with images 
 """
 
 # https://pillow.readthedocs.io/en/stable/index.html
+
+
+from PIL import Image, UnidentifiedImageError
+from PIL.ExifTags import TAGS
+
+# own libs
+from image_meta.geo import Geo
+from image_meta.exif import ExifTool
+from image_meta.persistence import Persistence
 
 import json
 import os
@@ -11,21 +20,22 @@ import shlex
 import shutil
 import subprocess
 import traceback
+import time
 import datetime
 from datetime import datetime as dt_module
 from datetime import date
 from pathlib import Path
 from bs4 import BeautifulSoup as bs
-import lxml.etree as etree
+import pandas as pd
+# import lxml.etree as etree
 import pytz
-from pytz import timezone
+import pprint
+# from pytz import timezone
+from tools import img_file_info_xls as img_file
 
 URL_OSM="https://www.openstreetmap.org/#map=16/lat/lon"
 
 
-import pandas as pd
-from PIL import Image, UnidentifiedImageError
-from PIL.ExifTags import TAGS
 
 # Relevant fields
 EXIF_FIELDS=["Software","Copyright","Make","Model","LensModel",
@@ -127,7 +137,10 @@ CMD_EXIF_READ_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -charset
 CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -L -s -r -n -Directory *'
 
 # CMD EXIFTOOL COMMAND TO COPY GPS CORDINATES from '
-EXIFTOOL_GPS='EXIFTOOL -geosync=TIME_OFFSET -geotag "*.LOGTYPE" "*.FILETYPE"'
+CMD_EXIFTOOL_GPS='EXIFTOOL -geosync=TIME_OFFSET -geotag "*.LOGTYPE" "*.FILETYPE"'
+
+# CMD EXIFTOOL READ SINGLE FILE METADATA as json
+CMD_EXIFTOOL_FILE='EXIFTOOL -s -j -charset filename=latin FILENAME'
 
 # MAGICK commands
 CMD_MAGICK_RESIZE="_MAGICK convert _FILE_IN -resize _IMAGESIZEx -quality _QUALITY _FILE_OUT"
@@ -838,6 +851,7 @@ def copy_metadata_from_panofile(fp_root,exiftool="exiftool.exe",
     print(f"\n### FINISHED, ({len(all_exiftool_cmds)}) Exiftool operations done ###")
     return all_exiftool_cmds
 
+
 def exiftool_read_meta_recursive(fp_root=None,
                                  exif_attributes=EXIF_ATTRIBUTES,
                                  exiftool="exiftool.exe",
@@ -944,12 +958,12 @@ def exiftool_write_gps(fp:str=None,ts_gps:str=None,img_gps_name="GPS",
 
         htps://exiftool.org/geotag.html#TP1
         https://exiftool.org/geotag.html
-        GPS display reads   19:32:21 UTC and 
-        DateTimeOriginal is 14:31:49 (TIMEZONE -5:00 UTC) then for this image the 
-        UTC                 19:31:49 (TIMEZONE -5:00 UTC) then for this image the 
-        camera clock was 32 seconds slow (assuming that the timezone of the camera clock was -05:00). 
-        A) Use the Geosync tag to specify the time difference while geotagging. 
-        Using this technique the existing image timestamps will not be corrected, 
+        GPS display reads   19:32:21 UTC and
+        DateTimeOriginal is 14:31:49 (TIMEZONE -5:00 UTC) then for this image the
+        UTC                 19:31:49 (TIMEZONE -5:00 UTC) then for this image the
+        camera clock was 32 seconds slow (assuming that the timezone of the camera clock was -05:00).
+        A) Use the Geosync tag to specify the time difference while geotagging.
+        Using this technique the existing image timestamps will not be corrected,
         but the GPSTimeStamp tag created by the geotagging process will contain the correct GPS time:
         exiftool -geosync=+00:00:32 -geotag my_gps.log C:\Images
         DateTimeOriginal (CAM)>  UTC_CAM + OFFSET = UTC_GPS > OFFSET = UTC_GPS - UTC_CAM
@@ -967,11 +981,11 @@ def exiftool_write_gps(fp:str=None,ts_gps:str=None,img_gps_name="GPS",
         Returns:
             type: Error code from EXIFTOOL
     """
-
+    pass
     # CMD EXIFTOOL COMMAND TO COPY GPS CORDINATES from '
-    EXIFTOOL_GPS='EXIFTOOL -geosync=TIME_OFFSET -geotag "*.LOGTYPE" "*.FILETYPE"'
+    # EXIFTOOL_GPS='EXIFTOOL -geosync=TIME_OFFSET -geotag "*.LOGTYPE" "*.FILETYPE"'
     # code is contained in jupyter file from October 2022
-    # pass    
+    # pass
 
 def exiftool_delete_metadata(fp,preview=True,exiftool="exiftool.exe",prompt=True,delete=True):
     """ removes all exif metadata for jpg files in path  """
@@ -1307,6 +1321,34 @@ def run_cmd(os_cmd:str,debug=True):
 
     return retcode
 
+
+def exiftool_read_single(fp:str,
+                         exiftool="exiftool.exe",
+                         debug=False):
+    """ read single image file attributes as dict """
+
+    cmd_exif=CMD_EXIFTOOL_FILE
+    cmd_exif=cmd_exif.replace("FILENAME",'"'+fp+'"')
+
+    if program_found(exiftool):
+        cmd_exif=cmd_exif.replace("EXIFTOOL",exiftool)
+    else:
+        return {}
+
+    oscmd_shlex=shlex.split(cmd_exif)
+
+    try:
+        process = subprocess.run(oscmd_shlex,
+                                 stdout=subprocess.PIPE,
+                                 universal_newlines=False,
+                                 check=True)
+        retcode=process.returncode
+        result=(process.stdout).decode("UTF8")
+        return json.loads(result)[0]
+    except subprocess.CalledProcessError as e:
+        retcode=1
+        print(f"EXIFTOOL EXCEPTION OCCURED {e}")
+
 def change_metadata(target,exif_attribute_dict=EXIF_LENS_LENSBABY_TRIO,save=True,exiftool="exiftool.exe",debug=True):
     """ change / replace metadata / useful for manual lenses
         target should be a single file list of files or a directory
@@ -1415,7 +1457,7 @@ def get_copy_dict(metadata_dict,marker_exif_attributes=["Model"],filename_signat
                 contains_metadata=[file_info.get(att,"") for att in marker_exif_attributes]
                 contains_metadata=all([bool(att) for att in contains_metadata])
 
-            contains_filename_signature=any([sig.lower() in f.lower() for sig in filename_signatures])           
+            contains_filename_signature=any([sig.lower() in f.lower() for sig in filename_signatures])
             is_source_file=any([contains_metadata,contains_filename_signature])
 
             if debug:
@@ -1519,48 +1561,48 @@ def move_manual_images(fp=None,fp_dict_in=None,debug=False,save=False):
     print(f"*** {num_moved} files were moved to {str(len(create_dirs))} new directories")
     return num_moved
 
-def get_waypoints(fp,show=False,tz_code="Europe/Berlin"):
-    """ Extracts waypoints from waypoint log 
+def read_waypoints(fp,show=False,tz_code="Europe/Berlin"):
+    """ Extracts waypoints from waypoint log
         Arguments:
             fp (str): File Path to waypoint
             show (bool): show details
-            tzcode (pytz.tzcode): Valid pytz timzone code 
+            tzcode (pytz.tzcode): Valid pytz timzone code
         Returns:
             dict: dictionary containing waypoints and dates and links to osm
-    
+
     """
-    
+
     timezone_loc = pytz.timezone(tz_code)
     timezone_utc = pytz.utc
 
     waypoint_dict={}
     content=[]
-    
+
     with open(fp, "r") as file:
         content = file.readlines()
         content = "".join(content)
         bs_content = bs(content, "lxml")
-    
+
     if show:
         print(f"--- READ FILE {fp}---")
         print(bs_content.prettify())
 
     i = 0
-    
+
     waypoints=bs_content.find_all("wpt")
-    
+
     if show:
         print(f"\n*** <{len(waypoints)}> Waypoints found")
-    
+
     for wp in waypoints:
         try:
-            lat=wp["lat"]
-            lon=wp["lon"]
-            ts=wp.find("time").text            
-            # timezone conversion            
+            lat=str(round(float(wp["lat"]),5))
+            lon=str(round(float(wp["lon"]),5))
+            ts=wp.find("time").text
+            # timezone conversion
             dt = datetime.datetime.strptime(ts,'%Y-%m-%dT%H:%M:%SZ')
-            dt_utc = dt.replace(tzinfo=timezone_utc)            
-            dt_local=dt_utc.astimezone(timezone_loc)                        
+            dt_utc = dt.replace(tzinfo=timezone_utc)
+            dt_local=dt_utc.astimezone(timezone_loc)
             i+=1
             url_osm=URL_OSM
             url_osm=url_osm.replace("lat",lat)
@@ -1568,13 +1610,201 @@ def get_waypoints(fp,show=False,tz_code="Europe/Berlin"):
             waypoint_dict[i]={"lat":lat,"lon":lon,
                               "datetime_utc":dt_utc.strftime("%Y:%m:%d %H:%M:%S"),
                               "datetime_local":dt_local.strftime("%Y:%m:%d %H:%M:%S"),
+                              "datetime":dt_local,
                               "timezone":tz_code,
                               "url_osm":url_osm
                               }
             if show:
                 print(f'({str(i)}) {waypoint_dict[i]["datetime_local"]} {waypoint_dict[i]["url_osm"]}')
         except KeyError as e:
-            print(f"Key {e} doesn't exist" )        
+            print(f"Key {e} doesn't exist" )
             continue
-            
-    return waypoint_dict        
+
+    return waypoint_dict
+
+def get_latlon_reverse(fp:str,show=True,geo=True,latlon=None):
+    """ gets reverse image gps info from either links in folder or
+        from latlon list
+        Arguments:
+            fp (str): file path
+            show (bool): display info
+            geo (bool): do reverse search
+            latlon (list): lat, lon to directly perform reverse search
+        Returns:
+            dict: geo info dictionary
+    """
+    p_old=os.getcwd()
+    p=Path(fp)
+    if p.is_dir():
+        os.chdir(p)
+    else:
+        print(f"{p} is not a directory")
+        return
+
+    if latlon:
+        url_list=["LATLON"]
+    else:
+        # get all url links
+        url_list=[f for f in os.listdir(fp) if f.endswith("url")]
+
+    out_dict={}
+    for f_url in url_list:
+        url = Persistence.read_internet_shortcut(f_url)
+        file_dict={}
+        if url:
+            latlon=Geo.latlon_from_osm_url(url)
+
+        if show:
+            print(f"\n*** File [{os.path.join(p,f_url)}], coordinates: {latlon}")
+        if latlon:
+            file_dict["latlon"]=latlon
+        else:
+            continue
+
+        if file_dict and geo:
+            geo_nominatim_dict=Geo.geo_reverse_from_nominatim(latlon)
+            geo_info=ExifTool.map_geo2exif(geo_nominatim_dict)
+            file_dict["url_geo_info"]=geo_info.get('SpecialInstructions',"NoGeoInfoUrl")
+            file_dict["url_osm"]=geo_nominatim_dict.get('url_osm',"")
+            file_dict["geo_description"]=geo_info.get('ImageDescription',"NoGeoDescription")
+            file_dict["geo_dict"]=geo_info
+            # get distance from original latlon vs returned latlon in meters
+            if file_dict["url_osm"] != "":
+                latlon_osm = Geo.latlon_from_osm_url(file_dict["url_osm"])
+                if latlon_osm:
+                    file_dict["geo_difference"]=int(1000*Geo.get_distance(latlon,latlon_osm))
+
+            if show:
+                print(f"*** Reverse Coordinates ({f_url}) / Difference")
+                print(f"    {file_dict['url_geo_info']}")
+                print(f"    {file_dict['url_osm']}")
+                print(f"    {file_dict['geo_description']}")
+                print(f"    {file_dict.get('geo_difference')}m Difference GPS - Coordinates Returned")
+            time.sleep(2)
+        if file_dict:
+            out_dict[f_url]=file_dict
+    return out_dict
+
+def update_img_meta_config(fp_config:str,geo=True,show=False):
+    """ checks and updates  image meta config file
+        Arguments:
+            fp_config (str): Path to Config File
+            geo (bool): Get Geo Coordinates
+            show (bool): Display information
+        Returns:
+            dict : updated configuration written to file
+    """
+    pp = pprint.PrettyPrinter(indent=3,sort_dicts=False)
+    error=False
+    p_old=os.getcwd()
+    p_config=Path(fp_config)
+    if not p_config.is_file():
+        print(f"Path {fp_config} doesn't exist")
+        return {}
+    os.chdir(p_config.parent)
+    config_dict=img_file.read_json(p_config)
+    if show:
+        print(f"*** Reading config file {p_config.name}")
+
+    # check for valid file settings
+    for k,v in config_dict.items():
+        if k.endswith("FILE") and not k.endswith("LATLON_FILE"):
+            p=Path(v)
+            if p.is_absolute():
+                if not p.exists():
+                    print(f"Parameter {k} File {p} doesn't exist")
+                    error=True
+            else:
+                if not p.absolute().exists():
+                    print(f"Parameter {k} File {p} doesn't exist in Path {p.absolute()}")
+                    error=True
+
+    # if not all files are here, execute fallback: try to get geolocation from url links instead
+    if error:
+        print(f"*** Not all referenced files in {fp_config} found, trying with latlon links")
+        latlon_reverse_data=get_latlon_reverse(p_config.parent,show,geo,latlon=None)
+        latlon=None
+        if latlon_reverse_data:
+            latlon_keys=list(latlon_reverse_data.keys())
+            latlon=latlon_reverse_data[latlon_keys[0]]
+            if len(latlon_keys)>1:
+                print(f"\n *** WARNING: THERE's multiple latlon files:{latlon_keys}, using {latlon_keys[0]}")            
+            config_dict["DEFAULT_LATLON"]=latlon["latlon"]             
+            config_dict["URL_OSM"]=latlon["url_osm"]
+                
+        if geo and latlon:
+            config_dict["URL_GEO_INFO"]=latlon.get('url_geo_info',"NoGeoInfoUrl")
+            config_dict["GEO_INFO"]=latlon.get('geo_description',"NoGeoDescription")
+            config_dict["GEO_DIFFERENCE"]=latlon.get('geo_difference',"NoGeoDifference")
+           
+        img_file.save_json(fp_config,config_dict)
+        os.chdir(p_old)
+        return config_dict
+
+    # read gps waypoint file
+    fp_waypoint=config_dict["WAYPOINT_FILE"]
+    if show:
+        print(f"\n*** Reading waypoint file {fp_waypoint}\n")
+    waypt_dict=img_file.read_waypoints(fp_waypoint)
+    if show:
+        pp.pprint(waypt_dict)
+    waypoint_num=1
+    if waypt_dict and len(waypt_dict)>1:
+        waypoint_num=int(input("Enter number to select waypoint"))
+    waypt=waypt_dict[waypoint_num]
+    dt_gps=waypt["datetime"]
+
+    # updating config
+    config_dict["DEFAULT_LATLON"]=[float(c) for c in (waypt.get("lat",0),waypt.get("lon",0))]
+    config_dict["CALIB_DATETIME"]=waypt["datetime_local"]
+    config_dict["TIMEZONE"]=waypt["timezone"]
+    config_dict["URL_OSM"]=waypt["url_osm"]
+
+    # read camera datetime calibration file
+    calib_img_file=config_dict["CALIB_IMG_FILE"]
+    cam_dict=img_file.exiftool_read_single(calib_img_file)
+
+    tz_name=config_dict["TIMEZONE"]
+    tz_local=pytz.timezone(tz_name)
+    tz_utc=pytz.UTC
+
+    img_file_name=cam_dict["FileName"]
+    dt_original_s=cam_dict["DateTimeOriginal"]
+    dt_offset_s=cam_dict["OffsetTimeOriginal"]
+    # convert to ISO date using offset from camera
+    dt_iso_cam_s=dt_original_s[:10].replace(":","-")+"T"+dt_original_s[11:]+dt_offset_s
+    dt_cam_local=dt_module.fromisoformat(dt_iso_cam_s).astimezone(tz_local)
+    dt_camera_s=dt_cam_local.strftime("%Y:%m:%d %H:%M:%S")
+
+    if show:
+        print(f"\n*** Reading Image to get Camera Datetime {calib_img_file}")
+        pp.pprint(cam_dict)
+
+    print("\n*** SAVING UPDATED CONFIG ***")
+    print(f"\n*** Updated config file {p_config.name}")
+    pp.pprint(config_dict)
+
+    print(f"\n*** Camera calibration date time from {calib_img_file}")
+    print(f"    ISO DATE: {dt_iso_cam_s} Camera Date: {dt_camera_s}")
+    dt_offset=int((dt_gps-dt_cam_local).total_seconds())
+    print(f"    Location {waypt['url_osm']}")
+    print(f"    GPS TIME: {dt_gps}, CAM TIME:{dt_cam_local}, OFFSET {dt_offset}s")
+
+    if geo:
+        geo_nominatim_dict=Geo.geo_reverse_from_nominatim(config_dict.get("DEFAULT_LATLON",[0.0,0.0]))        
+        geo_info=ExifTool.map_geo2exif(geo_nominatim_dict)
+        config_dict["URL_GEO_INFO"]=geo_info.get('SpecialInstructions',"NoGeoInfoUrl")
+        config_dict["GEO_INFO"]=geo_info.get('ImageDescription',"NoGeoDescription")
+        # get distance from original latlon vs returned latlon in meters
+        config_dict["GEO_DIFFERENCE"]=int(1000*Geo.get_distance(config_dict.get("DEFAULT_LATLON",[0.0,0.0]),
+                                                         geo_nominatim_dict.get("latlon",[0.0,0.0])))
+        if show:
+            print("*** Reverse Coordinates")
+            print(f"    {config_dict['URL_GEO_INFO']}")
+            print(f"    {config_dict['URL_OSM']}")
+            print(f"    {config_dict['GEO_INFO']}")
+            print(f"    {config_dict['GEO_DIFFERENCE']}m Difference GPS - Coordinates Returned")            
+
+    img_file.save_json(fp_config,config_dict)
+    os.chdir(p_old)
+    return config_dict
