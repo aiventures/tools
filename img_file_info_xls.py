@@ -39,9 +39,11 @@ URL_OSM="https://www.openstreetmap.org/#map=16/lat/lon"
 
 # Relevant fields
 EXIF_FIELDS=["Software","Copyright","Make","Model","LensModel",
-                 "FocalLength","FocalLengthIn35mmFilm","FNumber","ISOSpeedRatings","GPSInfo",
-                 "DateTime","DateTimeOriginal","ExifImageHeight",
-                 "ExifImageWidth","ImageDescription","PictureEffect","PictureProfile"]
+             "FocalLength","FocalLengthIn35mmFilm","FNumber","ISOSpeedRatings","GPSInfo",
+             "DateTime","DateTimeOriginal","ExifImageHeight",
+             "ExifImageWidth","ImageDescription","PictureEffect","PictureProfile"]
+
+ALL_EXIF_TAGS=list(TAGS.values())             
 
 SOFTWARE_DXO="DxO"
 SOFTWARE_INSTA="Insta360 one x2"
@@ -207,7 +209,7 @@ def save_exif_attributes(filepath,attribute_list:list):
                 #s = "No data was saved"
     return None
 
-def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,
+def read_exif(f:str,exif_fields:str=ALL_EXIF_TAGS,software:str=SOFTWARE,
              include_entropy=False,debug=False,include_app=False):
     """ reads exif data from image file """
     out_dict={}
@@ -232,8 +234,19 @@ def read_exif(f:str,exif_fields:str=EXIF_FIELDS,software:str=SOFTWARE,
 
     exifdata=im.getexif()
     im.close()
-    exif_dict=dict([(TAGS.get(tag_id,str(tag_id)),
-                    {"tag_id":tag_id,"value":exifdata.get(tag_id,None)}) for tag_id in list(exifdata.keys())])
+
+    ### loop over all availabe exif data
+    im_exif_dict=im._getexif()
+    exif_dict={}
+
+    for tag_id,exif_value in im_exif_dict.items():
+        exif_attribute=TAGS.get(tag_id)
+        if exif_attribute and exif_attribute in exif_fields:
+            exif_dict[exif_attribute]={"tag_id":tag_id,"value":exif_value}
+        
+    # exif_dict=dict([(TAGS.get(tag_id,str(tag_id)),
+    #                 {"tag_id":tag_id,"value":exifdata.get(tag_id,None)}) for tag_id in list(exifdata.keys())])
+
     if debug:
         print(f"Metadata attributes: {exif_dict.keys()}")
 
@@ -1805,7 +1818,7 @@ def update_img_meta_config(fp_config:str,geo=True,show=False):
         hh, mm = dt_offset.seconds // 3600, dt_offset.seconds % 3600 / 60.0
         dt_offset_s=str(hh).zfill(2)+":"+str(int(mm)).zfill(2)        
         if dt_gps.utcoffset().total_seconds() > 0:
-          dt_offset_s = "+"+dt_offset_s        
+            dt_offset_s = "+"+dt_offset_s        
         print(f"WARN: No Date Offset found in Image, will use offset from gps timestamp {dt_offset_s}") 
 
     # convert to ISO date using offset from camera
