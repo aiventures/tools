@@ -1,0 +1,162 @@
+Architektur
+	Anlagen
+		Baustelle
+		Boden
+		Botanischer Garten
+		Brücke
+		Friedhof
+	Gebaeude
+		Mühle
+		Museum
+		Restaurant
+		Ruine
+			Ritter
+			Roemer
+	Gebäudedetail
+		Denkmal
+		Fassade
+		Fenster
+		Grabstein
+		Mauer
+		Säule
+		Skulptur
+		Steg
+		Strassernlampe
+		Treppe
+		Verkehrszeichen
+	Innenraum
+		Zimmer
+	Technische Gebäude
+		Bahnhof
+		Schleuse
+		Stahlwerk
+		Unterführung
+		Windanlage
+Dinge
+	Alltagssachen
+		Antenne
+		Belege
+	Fotosachen
+		Kamera
+		Lichtbox
+		Monopod
+		Objektiv
+		Rucksack
+		Stativ
+	Kamerazubehör
+Ereignis
+	Arbeit
+	Ausflug
+		Fahrradtour
+	Urlaub
+Fototechnik
+	Aufnahme
+		Minimalismus
+		Monochrom
+		Out Of Camera
+		Panorama
+			Small World
+	Bildstil
+		Abstrakt
+	Blende
+		F1
+		F1.4
+		F1.5
+		F1.8
+		F2
+		F2.5
+		F2.8
+		F3.5
+		F4
+		F5
+		F5.6
+		F7
+		F8
+		F11
+		F16
+		F22
+	Objektivmodell
+		Kompaktkamera
+			Sony RX100 V
+		Smartphone
+		Sony E Mount
+			Metabones Speed Booster EF E Mount Ultra
+			Pergear
+				Pergear 10mm F5.6
+	Technische Aufnahmen
+		Objektivtest
+		Testbilder
+		Testchart
+Kochen
+Landschaft
+	Acker
+	Allee
+	Aue
+Natur
+	Natur Abstrakt
+	Natur Detail
+		Blatt
+		Blüte
+	Pflanze
+		Baum
+			Astwerk
+			Baumgruppe
+			Kastanie
+			Kirsche
+			Weide
+		Blume
+			Distel
+			Gaensebluemchen
+			Jungfer Im Gruenen
+			Klatschmohn
+			Kornblume
+			Krokus
+			Magnolie
+			Margerite
+			Mohn
+			Sonnenblume
+			Tulpe
+	Tier
+		Insekt
+			Ameise
+			Assel
+		Tierdetails
+			Federn
+			Spinnennetz
+		Vogel
+			Amsel
+			Blaumeise
+	Unbelebte Natur
+		Astronomie
+			Mond
+			Sonnenfinsternis
+			Sternenhimmel
+				Milchstrasse
+				Sternbilder
+					Adler
+					Schild
+					Schütze
+		Dunst
+		Eis
+			Schneeflocke
+		Wetter
+			Hagel
+			Hochwasser
+			Regen
+			Regenbogen
+			Schnee
+			Unwetter
+			Wolke
+				Mammatus
+	Jahreszeiten
+		Frühling
+		Herbst
+		Sommer
+		Winter
+	Tageszeiten
+		Frühmorgen
+		Morgen
+		Vormittag
+		Nachmittag
+		Abend
+		Nacht
