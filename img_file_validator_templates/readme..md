@@ -23,5 +23,6 @@ For detailed setup and placement of working documents also check the template se
 # Setup
 * Copy the validator setup template, define all path references  needed
 * Change / Adjust the control File Template ``[FP_METADATA_TPL]`` ([metadata_exif_sample.tpl](metadata_exif_sample.tpl)) (Hints are provided in this file)
-* Change / Adjust keyword profiles and Keyword Hoerarchy files as needed (``[KEYWORD_HIER_FILE],[META_PROFILES_FILE]``, see above)
-
+* Change / Adjust keyword profiles and Keyword Hierarchy files as needed (``[KEYWORD_HIER_FILE],[META_PROFILES_FILE]``, see above)
+* Copy the settings file [_img_file_settings_templates.py](https://github.com/aiventures/tools_cmd/blob/main/_img_file_settings_templates.py) to ``_img_file_settings.py`` , adjust settings and place it into your executables path
+* You may try the image validation using this sample program https://github.com/aiventures/tools_cmd/blob/main/img_file_validator_cmd.py
