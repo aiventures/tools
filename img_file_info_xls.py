@@ -22,7 +22,7 @@ import subprocess
 import traceback
 import time
 import datetime
-from datetime import datetime as dt_module
+from datetime import datetime as DateTime
 from datetime import date
 from pathlib import Path
 from bs4 import BeautifulSoup as bs
@@ -43,7 +43,7 @@ EXIF_FIELDS=["Software","Copyright","Make","Model","LensModel",
              "DateTime","DateTimeOriginal","ExifImageHeight",
              "ExifImageWidth","ImageDescription","PictureEffect","PictureProfile"]
 
-ALL_EXIF_TAGS=list(TAGS.values())             
+ALL_EXIF_TAGS=list(TAGS.values())
 
 SOFTWARE_DXO="DxO"
 SOFTWARE_INSTA="Insta360 one x2"
@@ -142,12 +142,27 @@ CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE='EXIFTOOL -j EXIF_ATTRIBUTES -c "%.6f" -L -
 CMD_EXIFTOOL_GPS='EXIFTOOL -geosync=TIME_OFFSET -geotag "*.LOGTYPE" "*.FILETYPE"'
 
 # CMD EXIFTOOL READ SINGLE FILE METADATA as json
-CMD_EXIFTOOL_FILE='EXIFTOOL -s -j -charset filename=latin FILENAME'
+CMD_EXIFTOOL_FILE='EXIFTOOL -s -j -c "%.6f" -charset filename=latin FILENAME'
 # CMD EXIFTOOL READ ALL JPGs in a folder with coordinate formatting charset latin as json
 CMD_EXIFTOOL_ALL_JPGS='EXIFTOOL -j -c "%.6f" -charset latin -charset filename=latin -s *.jpg'
 
 # MAGICK commands
 CMD_MAGICK_RESIZE="_MAGICK convert _FILE_IN -resize _IMAGESIZEx -quality _QUALITY _FILE_OUT"
+
+def read_file(f:str)->list:
+    """ reading UTF8 txt File """
+    lines = []
+    try:
+        with open(f,encoding="utf-8") as fp:
+            for line in fp:
+                line = line.strip()
+                if len(line) == 0:
+                    continue
+                lines.append(line)
+    except:
+        print(f"Exception reading file {f}")
+        print(traceback.format_exc())
+    return lines
 
 def read_json(filepath:str):
     """ Reads JSON file"""
@@ -232,18 +247,19 @@ def read_exif(f:str,exif_fields:str=ALL_EXIF_TAGS,software:str=SOFTWARE,
     if include_entropy:
         out_dict["entropy"]=im.entropy()
 
-    exifdata=im.getexif()
-    im.close()
+    #exifdata=im.getexif()
+    #im.close()
 
     ### loop over all availabe exif data
     im_exif_dict=im._getexif()
+    im.close()
     exif_dict={}
 
     for tag_id,exif_value in im_exif_dict.items():
         exif_attribute=TAGS.get(tag_id)
         if exif_attribute and exif_attribute in exif_fields:
             exif_dict[exif_attribute]={"tag_id":tag_id,"value":exif_value}
-        
+
     # exif_dict=dict([(TAGS.get(tag_id,str(tag_id)),
     #                 {"tag_id":tag_id,"value":exifdata.get(tag_id,None)}) for tag_id in list(exifdata.keys())])
 
@@ -255,16 +271,23 @@ def read_exif(f:str,exif_fields:str=ALL_EXIF_TAGS,software:str=SOFTWARE,
             continue
         value = exif_dict[exif_field]["value"]
         if exif_field == "GPSInfo":
-            # changed 30.Oct 2022
-            if not (isinstance(value,list) or isinstance(value,tuple)):
-                continue
+            # changed 30.Oct 2022 TODO
+            if debug:
+                print(f"GPSINFO: {value}")
+            #if not (isinstance(value,list) or isinstance(value,tuple)):
+            #    continue
             # check if there are valid values
-            check_value =(value[2][0])
-            if (check_value==0) or (check_value.denominator==0):
-                continue
-            lat=str(round(float(value[2][0]+value[2][1]/60++value[2][2]/3600),4))
-            lon=str(round(float(value[4][0]+value[4][1]/60++value[4][2]/3600),4))
-            value= "https://www.openstreetmap.org/#map=16/"+lat+"/"+lon
+            #check_value =(value[2][0])
+            #if (check_value==0) or (check_value.denominator==0):
+            #    continue
+            try:
+                lat=str(round(float(value[2][0]+value[2][1]/60++value[2][2]/3600),4))
+                lon=str(round(float(value[4][0]+value[4][1]/60++value[4][2]/3600),4))
+                value= "https://www.openstreetmap.org/#map=16/"+lat+"/"+lon
+            except ValueError as e:
+                print(f"No valid GPSInfo ({e})")
+
+                value="no_url_gps"
             out_dict["url_gps"]=value
         elif exif_field == "ImageDescription":
             out_dict["ImageDescription"]=value.encode('latin-1').decode('utf-8')
@@ -407,34 +430,36 @@ def num_path_in_name(file_dict:dict,p:str):
     return sum([1 for f in files if p_parent in (Path(f).stem).lower()])
 
 def get_file_dict(fp:str,regex_file_rules_dict=REGEX_RULE_DICT,
-                  filetype_classes_dict=FILETYPE_CLASSES_DICT,exif_file_types=None):
+                  filetype_classes_dict=FILETYPE_CLASSES_DICT,exif_file_types=None,
+                  verbose=False):
     """ returns a dict with information about files
         also accepts a regex file list to check for rules
     """
     file_dict={}
     p_root=Path(fp)
+    if verbose:
+        print(f"Analysing file path: {p_root}")
     p_root_lvl=len(p_root.parts)
 
     # analyze on folder level
     for subpath,_,files in os.walk(fp):
         p=Path(subpath)
 
-        # check for empty subpath 
+        # check for empty subpath
 
         if len(os.listdir(subpath))==0:
             p_parent=Path(os.path.join(*(p.parts)[:-1]))
-            p_lvl=len(p.parts)-p_root_lvl            
+            p_lvl=len(p.parts)-p_root_lvl
             subpath_dict=file_dict.get(subpath,{})
             subpath_dict["level"]=p_lvl
             subpath_dict["parent"]=p_parent
             subpath_dict["num_files"]=0
             subpath_dict["file_types"]={}
             subpath_dict["files"]=[]
-            file_dict[subpath]=subpath_dict           
+            file_dict[subpath]=subpath_dict
             continue
 
         for f in files:
-            # print("subpath",subpath)            
             p_parent=Path(os.path.join(*(p.parts)[:-1]))
             #print(f,p_parent)
             p_lvl=len(p.parts)-p_root_lvl
@@ -1064,7 +1089,7 @@ def magick_resize(fp,magick="magick.exe",image_size=2000,
                   remove_metadata=True,save=True,
                   descriptions=True,
                   target_path=None):
-    """ resize image / optionally remove metadata, 
+    """ resize image / optionally remove metadata,
         Parameters:
         fp: file path containing image files
         magick: executable, needs to be executable through system path
@@ -1205,9 +1230,9 @@ def exiftool_get_path_dict(fp,exif_template=CMD_EXIF_READ_ALL_RECURSIVE_TEMPLATE
 
         # get date
         try:
-            dt = dt_module.strptime(f_info.get("DateTimeOriginal",""), "%Y:%m:%d %H:%M:%S")
+            dt = DateTime.strptime(f_info.get("DateTimeOriginal",""), "%Y:%m:%d %H:%M:%S")
         except ValueError:
-            dt = dt_module.now()
+            dt = DateTime.now()
 
         dts=dt.strftime("%Y%m%d")
         f_info["Date"]=dts
@@ -1241,7 +1266,7 @@ def exiftool_rename_from_dict(path_dict,max_level=1,ignore_suffixes=["tpl"]):
     """
 
     # todays date as fallback
-    d_today=dt_module.now().strftime("%Y%m%d")
+    d_today=DateTime.now().strftime("%Y%m%d")
 
     num_renames=0
     rename_dict={}
@@ -1700,6 +1725,7 @@ def get_latlon_reverse(fp:str,show=True,geo=True,latlon=None):
 
         if file_dict and geo:
             geo_nominatim_dict=Geo.geo_reverse_from_nominatim(latlon)
+            time.sleep(2)
             geo_info=ExifTool.map_geo2exif(geo_nominatim_dict)
             file_dict["url_geo_info"]=geo_info.get('SpecialInstructions',"NoGeoInfoUrl")
             file_dict["url_osm"]=geo_nominatim_dict.get('url_osm',"")
@@ -1717,7 +1743,7 @@ def get_latlon_reverse(fp:str,show=True,geo=True,latlon=None):
                 print(f"    {file_dict['url_osm']}")
                 print(f"    {file_dict['geo_description']}")
                 print(f"    {file_dict.get('geo_difference')}m Difference GPS - Coordinates Returned")
-            time.sleep(2)
+
         if file_dict:
             out_dict[f_url]=file_dict
     return out_dict
@@ -1816,15 +1842,15 @@ def update_img_meta_config(fp_config:str,geo=True,show=False):
     except KeyError as e:
         dt_offset=dt_gps.utcoffset()
         hh, mm = dt_offset.seconds // 3600, dt_offset.seconds % 3600 / 60.0
-        dt_offset_s=str(hh).zfill(2)+":"+str(int(mm)).zfill(2)        
+        dt_offset_s=str(hh).zfill(2)+":"+str(int(mm)).zfill(2)
         if dt_gps.utcoffset().total_seconds() > 0:
-            dt_offset_s = "+"+dt_offset_s        
-        print(f"WARN: No Date Offset found in Image, will use offset from gps timestamp {dt_offset_s}") 
+            dt_offset_s = "+"+dt_offset_s
+        print(f"WARN: No Date Offset found in Image, will use offset from gps timestamp {dt_offset_s}")
 
     # convert to ISO date using offset from camera
     dt_iso_cam_s=dt_original_s[:10].replace(":","-")+"T"+dt_original_s[11:]+dt_offset_s
-    dt_cam_local=dt_module.fromisoformat(dt_iso_cam_s).astimezone(tz_local)
-    dt_camera_s=dt_cam_local.strftime("%Y:%m:%d %H:%M:%S")    
+    dt_cam_local=DateTime.fromisoformat(dt_iso_cam_s).astimezone(tz_local)
+    dt_camera_s=dt_cam_local.strftime("%Y:%m:%d %H:%M:%S")
 
     if show:
         print(f"\n*** Reading Image to get Camera Datetime {calib_img_file}")
@@ -1839,8 +1865,8 @@ def update_img_meta_config(fp_config:str,geo=True,show=False):
     dt_offset=int((dt_gps-dt_cam_local).total_seconds())
 
     config_dict["CALIB_DATETIME"]=waypt["datetime_local"]
-    config_dict["TIMEZONE"]=waypt["timezone"]    
-    config_dict["IMAGE_T_OFFSET"]=dt_offset    
+    config_dict["TIMEZONE"]=waypt["timezone"]
+    config_dict["IMAGE_T_OFFSET"]=dt_offset
     config_dict["IMAGE_DATETIME"]=dt_camera_s
     config_dict["IMAGE_DATETIME_ISO"]=dt_iso_cam_s
     config_dict["CALIB_OFFSET"]=dt_offset
