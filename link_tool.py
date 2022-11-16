@@ -14,8 +14,9 @@
 
 import os
 from pathlib import Path
-from tools import file_module as fm
 import webbrowser
+from tools import file_module as fm
+
 
 def read_url_json(f_file):
     """ validates json file, if generated from TabCopy Extension as json
