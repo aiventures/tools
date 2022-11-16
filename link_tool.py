@@ -84,7 +84,7 @@ def open_links(link_list):
     print(f"\n--- Opening ({len(url_list)}) Links")
     _ = [print(f"-   {l}") for l in url_list]
     for url in url_list:
-            webbrowser.open(url, new=2)
+        webbrowser.open(url, new=2)
 
 def save_links(fp,link_list):
     """ saving link list as json file """
