@@ -360,15 +360,17 @@ class ImageFileValidator():
                                     action_info["img_description"]=img_description
                                     config_dict["CALIB_IMG_DESCRIPTION"]=img_description
 
-                                gps_pos=calib_img_exif.get("GPSPosition").split(",")
                                 try:
+                                    gps_pos=calib_img_exif.get("GPSPosition").split(",")
                                     latlon=[float(latlon.strip().split(" ")[0]) for latlon in gps_pos]
-                                except ValueError as e:
-                                    print(f"Error converting latlon coordinates ({e})")
+                                except (ValueError,AttributeError) as e:
+                                    print(f"Error getting/converting latlon coordinates from image ({e})")
                                     latlon=None
+
                                 if latlon:
                                     action_info["latlon"]=latlon
                                 url=calib_img_exif.get("SpecialInstructions")
+
                                 if url:
                                     action_info["url"]=url
                         # parse default lat lon file
@@ -397,16 +399,22 @@ class ImageFileValidator():
 
             # identify most relevant item containing  lat lon coordinates in this order
             latlon_actions=["WAYPOINT_FILE","URL_OSM_LINK","DEFAULT_LATLON"]
-            latlons=[file_actions[action].get("latlon") for action in latlon_actions]
-            latlons=[latlon for latlon in latlons if not latlon is None]
-            if latlons:
-                latlon=latlons[0]
+            for action in latlon_actions:
+                latlon = file_actions[action].get("latlon")
+                if latlon:
+                    print(f"    Using latlon from {action}, coordinates {latlon}")
+                    break
+            # latlons=[file_actions[action].get("latlon") for action in latlon_actions]
+            # latlons=[latlon for latlon in latlons if not latlon is None]
+            # if latlons:
+            #     latlon=latlons[0]
 
             # get geo info
             geo_info=file_actions.get("GEO_INFO")
             if geo_info:
                 geo_info=geo_info.get("value","No reverse Geo Info available in Control File")
             print(f"    GEO: {geo_info}")
+
             # calculate difference to home
             if isinstance(latlon,list) and isinstance(self.latlon_home,list):
                 dist=round(Geo.get_distance(latlon,self.latlon_home),1)

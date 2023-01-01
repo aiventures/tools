@@ -32,6 +32,7 @@ import pytz
 import pprint
 # from pytz import timezone
 from tools import img_file_info_xls as img_file
+import codecs
 
 URL_OSM="https://www.openstreetmap.org/#map=16/lat/lon"
 
@@ -151,6 +152,7 @@ CMD_MAGICK_RESIZE="_MAGICK convert _FILE_IN -resize _IMAGESIZEx -quality _QUALIT
 
 def read_file(f:str)->list:
     """ reading UTF8 txt File """
+    # TODO allow for other formats
     lines = []
     try:
         with open(f,encoding="utf-8") as fp:
@@ -1640,10 +1642,13 @@ def read_waypoints(fp,show=False,tz_code="Europe/Berlin"):
     waypoint_dict={}
     content=[]
 
-    with open(fp, "r") as file:
-        content = file.readlines()
-        content = "".join(content)
-        bs_content = bs(content, features="xml")
+    with open(fp,'rb') as file:
+        content = file.read()
+        if content[:3] == codecs.BOM_UTF8:
+            content=content.decode("UTF-8-SIG")
+        else:
+            content=content.decode("UTF-8")
+        bs_content = bs(content, features="xml")        
 
     if show:
         print(f"--- READ FILE {fp}---")
@@ -1813,18 +1818,24 @@ def update_img_meta_config(fp_config:str,geo=True,show=False):
     fp_waypoint=config_dict["WAYPOINT_FILE"]
     if show:
         print(f"\n*** Reading waypoint file {fp_waypoint}\n")
-    waypt_dict=img_file.read_waypoints(fp_waypoint)
+    # waypt_dict=img_file.read_waypoints(fp_waypoint)
+    waypt_dict=img_file.read_waypoints(fp_waypoint,show=True)
     if show:
         pp.pprint(waypt_dict)
     waypoint_num=1
-    if waypt_dict and len(waypt_dict)>1:
-        waypoint_num=int(input("Enter number to select waypoint"))
-    waypt=waypt_dict[waypoint_num]
-    dt_gps=waypt["datetime"]
-
+    dt_gps=None
+    waypt={}
+    if waypt_dict:
+        if len(waypt_dict)>1:
+            waypoint_num=int(input("Enter number to select waypoint"))    
+        waypt=waypt_dict[waypoint_num]
+        dt_gps=waypt["datetime"]
+    else:
+        print(f"couldn't parse {fp_waypoint}, check possible encoding error (must be UTF8)")
+    
     # updating config
     config_dict["DEFAULT_LATLON"]=[float(c) for c in (waypt.get("lat",0),waypt.get("lon",0))]
-    config_dict["URL_OSM"]=waypt["url_osm"]
+    config_dict["URL_OSM"]=waypt.get("url_osm","no url found")
 
     # read camera datetime calibration file
     calib_img_file=config_dict["CALIB_IMG_FILE"]

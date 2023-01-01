@@ -65,7 +65,7 @@ def read_json(filepath:str):
 
 def save_json(filepath,data:dict):
     """ Saves dictionary data as UTF8 """
-    # todo encode date time see
+    # TODO encode date time see
     # https://stackoverflow.com/questions/11875770/how-to-overcome-datetime-datetime-not-json-serializable
 
     with open(filepath, 'w', encoding='utf-8') as json_file:
@@ -106,7 +106,7 @@ def read_file_info(fp,content=True,type_filters=[]):
     # read image metadata files
     if content:
         #read_exif=False
-        if (not bool(type_filters)) or ("jpg" in type_filters):            
+        if (not bool(type_filters)) or ("jpg" in type_filters):
             try:
                 print("\nGETTING EXIF DATA")
                 exif_info=img_info.exiftool_read_meta_recursive(fp,debug=False)

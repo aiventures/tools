@@ -46,8 +46,9 @@ def get_url_list_from_folder(p_link_folder,links_only=True):
     """
     num_links=0
     if not ( p_link_folder and os.path.isdir(p_link_folder)):
+        print(f"{p_link_folder} is not a folder, using current folder {os.getcwd()} ")
         p_link_folder=os.getcwd()
-        print(f"{p_link_folder} is not a folder ")
+
     url_dict=fm.read_file_info(p_link_folder,content=True,type_filters=["url","json"])
     url_out={}
     for p,file_info in url_dict.items():

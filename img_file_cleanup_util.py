@@ -7,7 +7,7 @@ from tools import img_file_info_xls as file_info
 
 
 # files that should not be deleted / moved
-IGNORE_FILES=["default.geo","metadata.tpl","metadata_exif.tpl","gps.meta"]
+IGNORE_FILES=["gps.geo","default.geo","metadata.tpl","metadata_exif.tpl","gps.meta"]
 
 # filetypes
 FILETYPE_DEL=["dop","ped","xmp","jpg_original","geo","tpl","tif"]
