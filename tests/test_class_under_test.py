@@ -1,4 +1,4 @@
-""" unit tests for dummy unit test in unittest_sample
+""" unit tests for dummy unit test in sample_unittest
     in root execute them 
 """
 
@@ -28,7 +28,7 @@ from unittest.mock import create_autospec
 #from unittest.mock import patch
 #from unittest.mock import Mock
 
-from  unittest_sample.class_under_test import ClassUnderTest
+from  sample_unittest.class_under_test import ClassUnderTest
 
 # @pytest.mark.parametrize(
 #     "param1,param2",
@@ -77,7 +77,7 @@ class TestCUT():
     # using mock for method return
     def test_method_mock(self,mocker):
         # patching objects: create method stubs
-        mocker.patch("unittest_sample.refered_class.ReferedClass.get_refered_class_attribute", return_value="***MOCKED_RETURN***")
+        mocker.patch("sample_unittest.refered_class.ReferedClass.get_refered_class_attribute", return_value="***MOCKED_RETURN***")
 
         out = ClassUnderTest().method_cut()
         print(f"returning value method_cut(): {out}")
@@ -86,7 +86,7 @@ class TestCUT():
     # using mock for method return
     def test_method_mock_fixture(self,my_cut,mocker):
         # patching objects: create method stubs, also works for ficture objects
-        mocker.patch("unittest_sample.refered_class.ReferedClass.get_refered_class_attribute", return_value="***MOCKED_RETURN***")
+        mocker.patch("sample_unittest.refered_class.ReferedClass.get_refered_class_attribute", return_value="***MOCKED_RETURN***")
         out = my_cut.method_cut()
         print(f"returning value for fixtured object method_cut(): {out}")
         assert True
@@ -104,7 +104,7 @@ class TestCUT():
                 return p
 
         # patch the method with a side effect
-        mocker.patch("unittest_sample.class_under_test.ClassUnderTest._method_internal", side_effect=my_mocked_func)
+        mocker.patch("sample_unittest.class_under_test.ClassUnderTest._method_internal", side_effect=my_mocked_func)
         out = my_cut.method_call_internal("test")
         assert "SPECIAL" in out
         out = my_cut.method_call_internal("other")
@@ -127,7 +127,7 @@ class TestCUT():
         mock_func.side_effect=sideeffect_func
 
         # attach mock function to original object
-        m = mocker.patch("unittest_sample.class_under_test.ClassUnderTest.method_complex", side_effect=mock_func)
+        m = mocker.patch("sample_unittest.class_under_test.ClassUnderTest.method_complex", side_effect=mock_func)
 
         # assert m.call_count == 2 # mock is called two times (is of type MagicMock)
         #assert result == expected # expected result

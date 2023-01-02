@@ -1,6 +1,6 @@
 """ Dummy Class to use unittests on """
 
-from unittest_sample.refered_class import ReferedClass
+from sample_unittest.refered_class import ReferedClass
 
 class ClassUnderTest():
     """ Dummy Class to use unittests on """
