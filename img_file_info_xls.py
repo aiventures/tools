@@ -763,6 +763,7 @@ def delete_subfolders(fp_root:str,verbose=False,delete_folder_list=["metadata"],
 
 def program_found(program="exiftool.exe"):
     """ checks if an executable can be found """
+
     program_which=shutil.which(program)
     if not program_which:
         print(f"Program {program} not found, check path")
@@ -917,6 +918,7 @@ def exiftool_read_meta_recursive(fp_root=None,
                                  exiftool="exiftool.exe",
                                  debug=False,exif_template=CMD_EXIF_READ_RECURSIVE_TEMPLATE)->dict:
     """ recursively read jpeg information """
+
     # save current directory to switch back after operation
     fp_original=os.getcwd()
     cmd_exif_read_recursive=exif_template
@@ -935,7 +937,6 @@ def exiftool_read_meta_recursive(fp_root=None,
         print(f"*** Path: {fp}")
         print("    "+ os_cmd)
     oscmd_shlex=shlex.split(os_cmd)
-
     try:
         process = subprocess.run(oscmd_shlex,
                                  stdout=subprocess.PIPE,
@@ -1086,7 +1087,9 @@ def exiftool_delete_metadata(fp,preview=True,exiftool="exiftool.exe",prompt=True
     os.chdir(fp_original)
     return retcode
 
-def magick_resize(fp,magick="magick.exe",image_size=2000,
+def magick_resize(fp,magick="magick.exe",
+                  exiftool="exiftool.exe",
+                  image_size=2000,
                   quality=90,prefix=False,
                   remove_metadata=True,save=True,
                   descriptions=True,
@@ -1123,6 +1126,7 @@ def magick_resize(fp,magick="magick.exe",image_size=2000,
 
     # get files per path
     img_dict=exiftool_read_meta_recursive(fp,
+             exiftool=exiftool,
              exif_attributes=EXIF_ATTRIBUTES_MINIMUM)
 
     img_dict={p:v for (p,v) in img_dict.items() if file_addition not in Path(p).stem }
@@ -1648,7 +1652,7 @@ def read_waypoints(fp,show=False,tz_code="Europe/Berlin"):
             content=content.decode("UTF-8-SIG")
         else:
             content=content.decode("UTF-8")
-        bs_content = bs(content, features="xml")        
+        bs_content = bs(content, features="xml")
 
     if show:
         print(f"--- READ FILE {fp}---")
@@ -1827,12 +1831,12 @@ def update_img_meta_config(fp_config:str,geo=True,show=False):
     waypt={}
     if waypt_dict:
         if len(waypt_dict)>1:
-            waypoint_num=int(input("Enter number to select waypoint"))    
+            waypoint_num=int(input("Enter number to select waypoint"))
         waypt=waypt_dict[waypoint_num]
         dt_gps=waypt["datetime"]
     else:
         print(f"couldn't parse {fp_waypoint}, check possible encoding error (must be UTF8)")
-    
+
     # updating config
     config_dict["DEFAULT_LATLON"]=[float(c) for c in (waypt.get("lat",0),waypt.get("lon",0))]
     config_dict["URL_OSM"]=waypt.get("url_osm","no url found")

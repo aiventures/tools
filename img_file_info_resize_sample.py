@@ -25,7 +25,7 @@ if not os.path.isdir(fp):
     fp=os.getcwd()
 print(f"--- Resize images in folder: {fp}")
 
-img_file_info_xls.magick_resize(fp,magick=magick,image_size=image_size,
+img_info.magick_resize(fp,magick=magick,image_size=image_size,
                   quality=quality,prefix=prefix,
                   remove_metadata=remove_metadata,save=save,
                   descriptions=descriptions,
