@@ -107,7 +107,8 @@ EXIF_ATTRIBUTES=["Directory","FileName","FileSize#","DateCreated",
                  "GPSLatitude","GPSLatitudeRef",
                  "GPSLongitude","GPSLongitudeRef",
                  "GPSPosition","Keywords","DateTime","DateTimeOriginal",
-                 "PictureEffect","PictureProfile"]
+                 "PictureEffect","PictureProfile","FocusMode","FocusLocation",
+                 "FocusDistance2"]
 
 EXIF_ATTRIBUTES_MINIMUM=["Directory","FileName",
                          "Title","Make","Model","LensModel",
@@ -146,6 +147,8 @@ CMD_EXIFTOOL_GPS='EXIFTOOL -geosync=TIME_OFFSET -geotag "*.LOGTYPE" "*.FILETYPE"
 CMD_EXIFTOOL_FILE='EXIFTOOL -s -j -c "%.6f" -charset filename=latin FILENAME'
 # CMD EXIFTOOL READ ALL JPGs in a folder with coordinate formatting charset latin as json
 CMD_EXIFTOOL_ALL_JPGS='EXIFTOOL -j -c "%.6f" -charset latin -charset filename=latin -s *.jpg'
+# like CMD_EXIFTOOL_ALL_JPGS but only with selected attributes
+CMD_EXIFTOOL_ALL_JPGS_ATT='EXIFTOOL -j ATTRIBUTES -c "%.6f" -charset latin -charset filename=latin -s *.jpg'
 
 # MAGICK commands
 CMD_MAGICK_RESIZE="_MAGICK convert _FILE_IN -resize _IMAGESIZEx -quality _QUALITY _FILE_OUT"
@@ -968,7 +971,6 @@ def exiftool_read_meta_recursive(fp_root=None,
         img_dict[p]=imginfo
 
     os.chdir(fp_original)
-
     return img_dict
 
 def exiftool_get_descriptions(img_info_dict:dict):
@@ -1141,12 +1143,12 @@ def magick_resize(fp,magick="magick.exe",
 
         if target_path:
             os.chdir(target_path)
-        else:
-            os.chdir(fp_original)
         print(f"    Write descriptions to {os.path.join(os.getcwd(),'descriptions.txt')}")
 
         with open('descriptions.txt', 'w') as file:
             file.writelines(s_list)
+        os.chdir(fp_original)
+        
 
     image_dict={}
     for fp,img_info in img_dict.items():
@@ -1158,6 +1160,7 @@ def magick_resize(fp,magick="magick.exe",
 
     # do the changes for each folder
     for p,files in image_dict.items():
+
         os.chdir(p)
         print(f"\n*** FOLDER {p}")
 
