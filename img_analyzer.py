@@ -2,6 +2,7 @@
 
 import os
 import json
+import logging
 
 from json import JSONDecodeError
 from pathlib import Path
@@ -9,6 +10,8 @@ from pathlib import Path
 from tools_console.persistence import Persistence
 from tools_console.cmd_runner import CmdRunner as Runner
 from tools import img_file_info_xls as fi
+
+log = logging.getLogger(__name__)
 
 class ImageAnalyzer():
     """ Analyzes Image Metadata and will write output.
@@ -60,7 +63,9 @@ class ImageAnalyzer():
                     "_COL_R_":"235", "_COL_G_":"155","_COL_B_":"52",
                     "_TRANSPARENCY_":"0.0" }
 
+
     def __init__(self,fp:str=".") -> None:
+        log.debug("start")
         self._exiftool = ImageAnalyzer.CMD_EXIFTOOL
         self._magick = ImageAnalyzer.CMD_MAGICK
         self._exif_attributes = ImageAnalyzer.EXIF_ANALYSIS_ATTRIBUTES
@@ -68,8 +73,7 @@ class ImageAnalyzer():
         self._file_meta = ImageAnalyzer.FILE_META
         self._fp = None
         if not os.path.isdir(fp):
-            # TODO switch to log
-            print(f"{fp} is not a valid directory, exit")
+            log.error("%s is not a valid directory, exit",fp)
             return
         # setting paths
         self._fp = fp
@@ -104,7 +108,7 @@ class ImageAnalyzer():
             image_size (int, optional): Image size. Defaults to 1000.
             quality (int, optional): Quality. Defaults to 80.
         """
-
+        log.debug("start")
         Path.mkdir(self._p_analysis_tmp,exist_ok=True)
         Path.mkdir(self._p_analysis,exist_ok=True)
         os.chdir(self._fp)
@@ -119,10 +123,11 @@ class ImageAnalyzer():
     @staticmethod
     def get_focus_position_rel(metadata:dict):
         """ get focus position from image metadata """
+        log.debug("start")
         try:
             focus_location=metadata["FocusLocation"]
-        except KeyError:
-            print("No focus Location found")
+        except KeyError as e:
+            log.warning("No focus location found in metadata %s",e)
             return None
 
         # shape: xmax, ymax, x,y
@@ -136,6 +141,7 @@ class ImageAnalyzer():
     @staticmethod
     def get_utf8_str(s:str,encoding:str="windows-1252"):
         """ correct any encoding . windows encoding is default """
+        log.debug("start")
         return s.encode(encoding).decode("utf-8")
 
     @staticmethod
@@ -150,6 +156,7 @@ class ImageAnalyzer():
             str: analysis text string
         """
 
+        log.debug("start")
         s=""
         f=metadata.get("SourceFile","N/A")
         d=metadata.get("DateTimeOriginal","N/A")
@@ -210,14 +217,14 @@ class ImageAnalyzer():
         Returns:
             list: _description_
         """
-
+        log.debug("start")
         # calculates focus box area
         try:
             width=metadata["ImageWidth"]
             height=metadata["ImageHeight"]
             # focus_location=metadata["FocusLocation"]
         except KeyError:
-            print(f"Not all data found in metadata to create focus box for file {metadata.get('SourceFile')}")
+            log.warning("Not all data found in metadata to create focus box for file %s",metadata.get('SourceFile'))
             return None
 
         x_foc_rel,y_foc_rel=ImageAnalyzer.get_focus_position_rel(metadata)
@@ -243,7 +250,7 @@ class ImageAnalyzer():
         Returns:
             dict: image file metadata alongside wit magick command
         """
-
+        log.debug("start")
         os.chdir(self._p_analysis_tmp)
         exif_attributes=self._exif_attributes
         exif_attributes=" ".join(["-"+a for a in exif_attributes])
@@ -261,19 +268,17 @@ class ImageAnalyzer():
         try:
             files_metadata=json.loads(cmd_out)
         except JSONDecodeError as e:
-            print(f"JSON Decode Error: {e.msg} error occured in output at column {e.colno}, line {e.lineno}")
-
+            err_details={"msg":e.msg,"col":str(e.colno),"line":str(e.lineno)}
+            log.error("JSON Decode Error: %(msg)s error occured in output at column %(col)s, line %(line)s",err_details)
         for file_metadata in files_metadata:
             # convert Title into UTF 8
             if file_metadata.get("Title"):
                 file_metadata["Title"]=ImageAnalyzer.get_utf8_str(file_metadata["Title"])
-            #print("---")
             filename=Path(file_metadata["SourceFile"])
             filename=filename.stem+"_ana"+filename.suffix
             file_metadata["TargetFile"]=os.path.join(self._p_analysis,filename)
             file_metadata["FocusBox"]=ImageAnalyzer.get_focus_box(file_metadata)
             file_metadata["Description"]=ImageAnalyzer.create_analysis_text(file_metadata)
-            #print(file_metadata)
             # convert to a os magick command
             draw_config=self._magick_box_config.copy()
             try:
@@ -284,9 +289,8 @@ class ImageAnalyzer():
                 draw_config["_Y0_"]=str(file_metadata["FocusBox"][0][1])
                 draw_config["_X1_"]=str(file_metadata["FocusBox"][2][0])
                 draw_config["_Y1_"]=str(file_metadata["FocusBox"][2][1])
-            except TypeError:
-            #except TypeError as e:
-                # TODO log error
+            except TypeError as e:
+                log.error("not all metadata found to create focus box (%s)",e)
                 continue
             # replace template
             cmd_magick=ImageAnalyzer.CMD_MAGICK_DRAW_FOCUS_BOX
@@ -302,10 +306,10 @@ class ImageAnalyzer():
                 continue
             ret_code=runner.run_cmd(cmd)
             if ret_code == 0:
-                print(f"Writing {file_metadata['TargetFile']}")
+                log.info("Writing file %s",file_metadata['TargetFile'])
                 cmd_out=runner.get_output()
             else:
-                print(f"Error writing {file_metadata['TargetFile']}")
+                log.error("Error writing file %s",file_metadata['TargetFile'])
 
         return files_metadata
 
@@ -316,7 +320,7 @@ class ImageAnalyzer():
             remove_metadata (bool, optional): _description_. Defaults to True.
                 dict: image file metadata (if supplied metadata will be written)
         """
-
+        log.debug("start")
         os.chdir(self._fp)
         # clean up
         if str(self._fp) in str(self._p_analysis_tmp):
@@ -325,19 +329,20 @@ class ImageAnalyzer():
 
         # remove metadata from images
         if remove_metadata:
-            print(f"Deletion of image metadata in folder {os.getcwd()}")
+            log.info("Deletion of image metadata in folder %s",os.getcwd())
             runner = Runner()
             cmd_exiftool=ImageAnalyzer.CMD_EXIFTOOL_DELETE_META.replace("_EXIF_",self._exiftool)
             ret_code=runner.run_cmd(cmd_exiftool)
             if ret_code == 0:
                 cmd_out=runner.get_output()
-                print(cmd_out)
+                log.info("Command Line returned: %s",cmd_out)
 
     def analyze(self)->dict:
         """ creates analysis images
         Returns:
             dict: returns the metadata dictionary
         """
+        log.debug("start")
         old_cwd=os.getcwd()
         # create small sizze copies in a temporary folder
         self.copy_images()

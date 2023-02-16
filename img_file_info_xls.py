@@ -22,6 +22,7 @@ import subprocess
 import traceback
 import time
 import datetime
+import logging
 from datetime import datetime as DateTime
 from datetime import date
 from pathlib import Path
@@ -152,6 +153,8 @@ CMD_EXIFTOOL_ALL_JPGS_ATT='EXIFTOOL -j ATTRIBUTES -c "%.6f" -charset latin -char
 
 # MAGICK commands
 CMD_MAGICK_RESIZE="_MAGICK convert _FILE_IN -resize _IMAGESIZEx -quality _QUALITY _FILE_OUT"
+
+log = logging.getLogger(__name__)
 
 def read_file(f:str)->list:
     """ reading UTF8 txt File """
@@ -1109,6 +1112,7 @@ def magick_resize(fp,magick="magick.exe",
         target_path = None (target path where to store images is fp isf None)
         Returns:  dict of images
     """
+    log.debug("start")
 
     if not program_found(magick):
         return {}
@@ -1124,7 +1128,7 @@ def magick_resize(fp,magick="magick.exe",
 
     if remove_metadata:
         magick_resize=magick_resize.replace("resize","thumbnail")
-    print(f"*** MAGICK template: [{magick_resize}]")
+    log.info("Using MAGICK template: %s",magick_resize)
 
     # get files per path
     img_dict=exiftool_read_meta_recursive(fp,
@@ -1143,12 +1147,12 @@ def magick_resize(fp,magick="magick.exe",
 
         if target_path:
             os.chdir(target_path)
-        print(f"    Write descriptions to {os.path.join(os.getcwd(),'descriptions.txt')}")
+        log.info("Write descriptions to %s",os.path.join(os.getcwd(),'descriptions.txt'))
 
         with open('descriptions.txt', 'w') as file:
             file.writelines(s_list)
         os.chdir(fp_original)
-        
+
 
     image_dict={}
     for fp,img_info in img_dict.items():
@@ -1162,11 +1166,10 @@ def magick_resize(fp,magick="magick.exe",
     for p,files in image_dict.items():
 
         os.chdir(p)
-        print(f"\n*** FOLDER {p}")
+        log.info("FOLDER %s",str(p))
 
         for f in files:
             # skip processing if it already contains file addition
-            #print(f"    - {f}")
             file_path=Path(f)
             file_out=file_path.stem
 
@@ -1178,16 +1181,11 @@ def magick_resize(fp,magick="magick.exe",
             if target_path:
                 file_out=str(Path(os.path.join(target_path,file_out)).absolute())
             file_out='"'+file_out+'"'
-            # print(file_out)
 
             magick_file_resize=magick_resize.replace("_FILE_IN",'"'+f+'"')
             magick_file_resize=magick_file_resize.replace("_FILE_OUT",file_out)
-            #print(f"    {magick_file_resize}")
             oscmd_shlex=shlex.split(magick_file_resize,posix=True)
-            #print(oscmd_shlex)
-            print(f"    - {f:<25} > {file_out}")
-            #print(oscmd_shlex)
-            #print(f"{file_path.stem}  {file_path.suffix}")
+            log.info("Writing File %s",file_out)
             if save:
                 process = subprocess.run(oscmd_shlex,
                                          stdout=subprocess.PIPE,
@@ -1196,7 +1194,7 @@ def magick_resize(fp,magick="magick.exe",
                 retcode=process.returncode
                 # stdout=process.stdout.decode("UTF-8")
                 if retcode != 0:
-                    print(f"Return code {retcode}, command {oscmd_shlex}")
+                    log.error("Error Return code %s, command %s",retcode,oscmd_shlex)
     os.chdir(fp_original)
     return image_dict
 
