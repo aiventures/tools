@@ -45,11 +45,10 @@ class ImageAnalyzer():
     MAGICK_CR="\\n"
 
     CMD_EXIFTOOL_DELETE_META="_EXIF_ -All= -overwrite_original *.jpg"
-    CMD_EXIFTOOL_JSON='_EXIF_ -json ATT -c "%.6f" -charset latin -charset filename=latin -s  -q *.jpg'
-
+    CMD_EXIFTOOL_JSON='_EXIF_ -json ATT -c "%.6f" -charset latin -charset filename=latin1 -s  -q *.jpg'
 
     # draw a box and add a text in a file using some parameters
-    CMD_MAGICK_DRAW_FOCUS_BOX=('_MAGICK_ convert _FILE_IN_ -pointsize _FONTSIZE_ -font _FONT_'
+    CMD_MAGICK_DRAW_FOCUS_BOX=('_MAGICK_ convert "_FILE_IN_" -pointsize _FONTSIZE_ -font _FONT_'
                             ' label:"_TEXT_" -gravity _GRAVITY_ -append -stroke _BOX_COLOR_'
                             ' -strokewidth _STROKE_WIDTH_'
                             ' -fill "rgba( _COL_R_, _COL_G_, _COL_B_, _TRANSPARENCY_ )"'
@@ -75,8 +74,8 @@ class ImageAnalyzer():
         if not os.path.isdir(fp):
             log.error("%s is not a valid directory, exit",fp)
             return
-        # setting paths
-        self._fp = fp
+        # setting paths        
+        self._fp = Path(fp).absolute()
         self._p_old = os.getcwd()
         p_analysis = ImageAnalyzer.P_ANALYSIS
         p_analysis_tmp = ImageAnalyzer.P_ANALYSIS_TMP
@@ -139,7 +138,7 @@ class ImageAnalyzer():
             return None
 
     @staticmethod
-    def get_utf8_str(s:str,encoding:str="windows-1252"):
+    def get_utf8_str(s:str,encoding:str="cp1252"):
         """ correct any encoding . windows encoding is default """
         log.debug("start")
         return s.encode(encoding).decode("utf-8")
@@ -227,12 +226,17 @@ class ImageAnalyzer():
             log.warning("Not all data found in metadata to create focus box for file %s",metadata.get('SourceFile'))
             return None
 
-        x_foc_rel,y_foc_rel=ImageAnalyzer.get_focus_position_rel(metadata)
-        x_foc=int(x_foc_rel*width)
-        y_foc=int(y_foc_rel*height)
-        dx,dy=[int(rel_size*width),int(rel_size*height)]
-        # draw box: lower left, focus, upper right
-        box=[[x_foc-dx,y_foc-dy],[x_foc,y_foc],[x_foc+dx,y_foc+dy]]
+        try:
+            x_foc_rel,y_foc_rel=ImageAnalyzer.get_focus_position_rel(metadata)
+            x_foc=int(x_foc_rel*width)
+            y_foc=int(y_foc_rel*height)
+            dx,dy=[int(rel_size*width),int(rel_size*height)]
+            # draw box: lower left, focus, upper right
+            box=[[x_foc-dx,y_foc-dy],[x_foc,y_foc],[x_foc+dx,y_foc+dy]]
+        except TypeError as e:
+            log.error("Couldn't find autofocus box,%s",e)
+            box=[[0,0],[1,1],[2,2]]
+
         for coord in box:
             if coord[0] <= 0:
                 coord[0]=1
@@ -265,17 +269,17 @@ class ImageAnalyzer():
         if ret_code == 0:
             cmd_out=runner.get_output()
         files_metadata={}
+        
         try:
             files_metadata=json.loads(cmd_out)
         except JSONDecodeError as e:
             err_details={"msg":e.msg,"col":str(e.colno),"line":str(e.lineno)}
             log.error("JSON Decode Error: %(msg)s error occured in output at column %(col)s, line %(line)s",err_details)
+
         for file_metadata in files_metadata:
-            # convert Title into UTF 8
-            if file_metadata.get("Title"):
-                file_metadata["Title"]=ImageAnalyzer.get_utf8_str(file_metadata["Title"])
+
             filename=Path(file_metadata["SourceFile"])
-            filename=filename.stem+"_ana"+filename.suffix
+            filename=filename.stem+"_ana"+filename.suffix            
             file_metadata["TargetFile"]=os.path.join(self._p_analysis,filename)
             file_metadata["FocusBox"]=ImageAnalyzer.get_focus_box(file_metadata)
             file_metadata["Description"]=ImageAnalyzer.create_analysis_text(file_metadata)
@@ -302,6 +306,7 @@ class ImageAnalyzer():
         runner = Runner()
         for file_metadata in files_metadata:
             cmd=file_metadata.get("CmdMagick")
+
             if not cmd:
                 continue
             ret_code=runner.run_cmd(cmd)
@@ -320,6 +325,7 @@ class ImageAnalyzer():
             remove_metadata (bool, optional): _description_. Defaults to True.
                 dict: image file metadata (if supplied metadata will be written)
         """
+
         log.debug("start")
         os.chdir(self._fp)
         # clean up

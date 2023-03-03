@@ -25,10 +25,10 @@ FILETYPE_CLASSES_DICT={"FILETYPE_DEL":FILETYPE_DEL,
 # folders that should be deleted
 DELETE_PATHS=["metadata","PEXV_PARAM","tmp"]
 # folders that should not be deleted
-IGNORE_PATHS=["PANO","POST","RAW"]
+IGNORE_PATHS=["PANO","POST","RAW","analysis"]
 
 # same thing but for deleting raw images
-IGNORE_PATHS_RAW=["POST"]
+IGNORE_PATHS_RAW=["POST","analysis"]
 DELETE_PATHS_RAW=["metadata","PEXV_PARAM","tmp","10RAW"]
 
 # lookup dictionary for deletion profile
