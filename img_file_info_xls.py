@@ -124,6 +124,17 @@ EXIF_ATTRIBUTES_MINIMUM=["Directory","FileName",
 
 # exif attributes for (manual) lenses
 EXIF_LENS_LENSBABY_TRIO={"lensmodel":"Lensbaby Trio 28mm","fnumber":"3.5","focallength":"28"}
+EXIF_LENSES={"LENSBABY_TRIO":{"lensmodel":"Lensbaby Trio 28mm","fnumber":"3.5","focallength":"28"},
+             "LENSBABY":{"lensmodel":"Lensbaby (SPEEDBOOSTER)","fnumber":"2.8","focallength":"50"},
+             "LENSBABY_SWEET_35":{"lensmodel":"Lensbaby Sweet 35 (SPEEDBOOSTER)","fnumber":"2.5","focallength":"35"},
+             "LENSBABY_SWEET_50":{"lensmodel":"Lensbaby Sweet 50 (SPEEDBOOSTER)","fnumber":"2.5","focallength":"50"},
+             "LENSBABY_SWEET_80":{"lensmodel":"Lensbaby Sweet 80 (SPEEDBOOSTER)","fnumber":"2.8","focallength":"50"},
+             "LENSBABY_EDGE_35":{"lensmodel":"Lensbaby Edge 35 (SPEEDBOOSTER)","fnumber":"3.5","focallength":"35"},
+             "LENSBABY_EDGE_50":{"lensmodel":"Lensbaby Edge 50 (SPEEDBOOSTER)","fnumber":"3.2","focallength":"50"},
+             "LENSBABY_EDGE_80":{"lensmodel":"Lensbaby Edge 80 (SPEEDBOOSTER)","fnumber":"2.8","focallength":"80"},
+             "LENSBABY_TWIST_60":{"lensmodel":"Lensbaby Twist 60 (SPEEDBOOSTER)","fnumber":"2.5","focallength":"60"},
+             "MITAKON_20":{"lensmodel":"Zhongyi Mitakon 20mm Super Macro 4-4.5x","fnumber":"2.0","focallength":"20"}
+            }
 
 # change single attributes for target (directory or file(s) )
 CMD_EXIF_CHANGE_ATTRIBUTES='EXIFTOOL EXIF_ATTRIBUTES TARGET'
