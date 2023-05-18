@@ -4,7 +4,7 @@ import os
 #import sys
 #import glob
 
-#import re
+import re
 #import shutil
 #from datetime import date
 from pathlib import Path
@@ -76,6 +76,34 @@ def save_json(filepath,data:dict):
             print(traceback.format_exc())
 
         return None
+
+def md2toc(f:str,as_string:bool=True):
+    """ reads contents of a markdown file, extracts header lines to table of contents
+        returns header lines as string or list
+    """
+    REGEX_HEADER = "^(#+) (.+)\n"
+    REGEX_LINK = r"\[(.+)\]\(.+\)"
+    MD_ANCHOR = "[_LABEL_](#_LINK_)"
+    MD_INDENT=2
+    lines_toc=[]
+    lines_in = read_txt_file(f,comment_marker="xxx")
+    for l in lines_in:
+        match = re.findall(REGEX_HEADER,l)
+        if match:
+            level=len(match[0][0])
+            label=match[0][1].strip()
+            link_text = re.findall(REGEX_LINK,label)
+            if link_text:
+                label = link_text[0]
+            link=label.replace(" ","-").lower()
+            anchor_link=MD_ANCHOR.replace("_LABEL_",label)
+            anchor_link=anchor_link.replace("_LINK_",link)
+            out_string=(level-1)*MD_INDENT*" "+"* "+anchor_link+" "*MD_INDENT
+            lines_toc.append(out_string)
+    if as_string:
+        return "\r\n".join(lines_toc)
+    else:
+        return lines_toc
 
 def get_fileref_from_shortcut(f):
     """ reads file location from windows shortcut
