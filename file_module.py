@@ -45,6 +45,17 @@ def read_txt_file(filepath,encoding='utf-8',comment_marker="#"):
         print(traceback.format_exc())
     return lines
 
+def save_txt_file(filepath,data:str,encoding='utf-8'):
+    """ saves data as lines from file
+    """
+    try:
+        with open(filepath,encoding=encoding,mode="+wt") as fp:
+            fp.write(data)
+    except:
+        print(f"Exception writing file {filepath}")
+        print(traceback.format_exc())
+    return 
+
 def read_json(filepath:str):
     """ Reads JSON file"""
     data = None
@@ -101,7 +112,7 @@ def md2toc(f:str,as_string:bool=True):
             out_string=(level-1)*MD_INDENT*" "+"* "+anchor_link+" "*MD_INDENT
             lines_toc.append(out_string)
     if as_string:
-        return "\r\n".join(lines_toc)
+        return "\n".join(lines_toc)+"\n"
     else:
         return lines_toc
 
