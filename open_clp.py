@@ -2,7 +2,7 @@
 import webbrowser
 import win32ui
 import os
-from pathlib import Path, PureWindowsPath
+# from pathlib import Path, PureWindowsPath
 from tools.simple_input import v
 p = v
 showinfo = True
@@ -12,7 +12,7 @@ p = p.replace('\r\n','')
 if showinfo:
     print(f"input: {p}")
 
-if (p[:4] == "http"):
+if p[:4] == "http":
     webbrowser.open(p)
 else:
     try:
@@ -20,4 +20,3 @@ else:
     except Exception as e:
         s = f"Input Error\n"+str(e)
         win32ui.MessageBox(s, "End Of Program")
-

@@ -1,4 +1,4 @@
-# util program to copy files from a source director to child directories
+""" util program to copy files from a source director to child directories """
 from image_meta.persistence import Persistence
 
 #import atexit

@@ -21,8 +21,8 @@ def get_health_tables_from_file(filepath):
     """ reads health tables from input file and returns them in an output dictionary """
 
     # only get relevant columns
-    relevant_colums = ['Datum', 'Uhrzeit', 'Sys.', 'Dia.', 
-                       'Puls',"MAD", 'Gewicht', 'BMI', 'Body fat', 
+    relevant_colums = ['Datum', 'Uhrzeit', 'Sys.', 'Dia.',
+                       'Puls',"MAD", 'Gewicht', 'BMI', 'Body fat',
                        'Wasseranteil', 'Muskelanteil', 'Wert']
 
     lines = read_file(f)
@@ -35,7 +35,7 @@ def get_health_tables_from_file(filepath):
     for line in lines:
         line = line.strip()
         if debug:
-            print(line)		
+            print(line)
         # process line containing table column names
         if column_title_line:
             column_title_line = False
@@ -54,11 +54,11 @@ def get_health_tables_from_file(filepath):
             health_table = health_tables[cols[0]]
             print(f"--- Health Indicator {cols[0]} ---")
             column_title_line = True
-            continue         
+            continue
 
         # try to interprete as date. If successful we have a data line
         try:
-            cols[0] = datetime.strptime(cols[0],"%d.%m.%Y") 
+            cols[0] = datetime.strptime(cols[0],"%d.%m.%Y")
         except (ValueError) as e:
             if debug:
                 print(f"couldnt interprete {cols[0]} as date ")
@@ -70,7 +70,7 @@ def get_health_tables_from_file(filepath):
         #    print("line_dict",line_dict)
         keys = list(filter(lambda k: k in relevant_colums, line_dict.keys()))
         if debug:
-            print("keys",keys)		
+            print("keys",keys)
         line_dict = dict(zip(keys,[line_dict[k] for k in keys]))
         if debug:
             print("line_dict",line_dict)
@@ -80,6 +80,7 @@ def get_health_tables_from_file(filepath):
     return health_tables
 
 def get_health_df(filepath):
+    """ get dataframe """
     health_tables = get_health_tables_from_file(filepath)
     df_out = None
 
@@ -95,24 +96,24 @@ def get_health_df(filepath):
     fields = []
 
     for health_table_type,health_table in health_tables.items():
-        print(f"--- Table {health_table_type} ---")    
+        print(f"--- Table {health_table_type} ---")
         if len(health_table) == 0:
             print(f"TABLE {health_table_type} IS EMPTY, will be skipped")
             continue
-        
+
         output_map.update(output_map_parts[health_table_type])
         fields.extend(fields_parts[health_table_type])
 
         # convert into data frame
         df = pd.DataFrame(health_table)
         print(f" Shape {df.shape}")
-        df.set_index('Datum', inplace=True)     
+        df.set_index('Datum', inplace=True)
 
         # create or append dataframe columns
         if df_out is None:
             df_out = df
         else:
-            df_out = pd.merge(left=df_out,right=df,how="outer",on="Datum")        
+            df_out = pd.merge(left=df_out,right=df,how="outer",on="Datum")
 
     # now we have all data in a single data frame, however it is required to condense rows as there are
     # duplicates for one day ...

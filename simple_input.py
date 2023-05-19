@@ -1,13 +1,13 @@
 """ util to get input values from clipboard or input """
-# simple input: either copies data from clipboard or from 
+# simple input: either copies data from clipboard or from
 # input command and stores it in variable v
-# this variable can be reused in other python utility programs 
-# by using import 
+# this variable can be reused in other python utility programs
+# by using import
 # from simple_input import v
 # to clean clipboard in windows: Use WIN+V
 
 import win32clipboard
-import win32ui
+# import win32ui
 
 v = None
 
@@ -27,6 +27,6 @@ if v is None:
 
 # strip any apostrophes
 if isinstance(v,str):
-    v.replace('"','') 
+    v.replace('"','')
 
 print(f"-- simple_input.py: Input Value set to <{v}> ---\n")

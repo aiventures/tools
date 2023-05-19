@@ -19,7 +19,7 @@ REGEX_TXT_URL_SERIES_EPISODE=re.compile(REGEX_TXT_URL_SERIES_EPISODE_S,re.IGNORE
 REGEX_DICT["REGEX_TXT_URL_SERIES_EPISODE"]={"type":REGEX_TYPE_TEXT,
                                             "regex":REGEX_TXT_URL_SERIES_EPISODE,
                                             "function":"get_series_episode"}
-                                          
+
 # regex to filter out (S##/E##) or (S##_E##) or (##_##) or (##/##)
 REGEX_TXT_SERIES_EPISODE_S=r".+?\([S]?(\d+)[\/_][E]?(\d+)\)"
 REGEX_TXT_SERIES_EPISODE=re.compile(REGEX_TXT_SERIES_EPISODE_S,re.IGNORECASE)
@@ -28,7 +28,7 @@ REGEX_DICT["REGEX_TXT_SERIES_EPISODE"]={"type":REGEX_TYPE_TEXT,
                                         "function":"get_series_episode"}
 REGEX_DICT["REGEX_FILE_SERIES_EPISODE"]={"type":REGEX_TYPE_FILENAME,
                                         "regex":REGEX_TXT_SERIES_EPISODE,
-                                        "function":"get_series_episode"}                                        
+                                        "function":"get_series_episode"}
 
 # looks for (#s#_#s_total#) signature in a file name
 REGEX_FILE_PARENTHESES_S=r".+?\((\d+)[_\/](\d+)\)"
@@ -155,7 +155,7 @@ def rename_video_files(info_dict,debug=False,save=True,ignore_folders=[],ignore_
             # now go through all available regexes
             series_episode=None
             name_new=""
-            for regex_rule,regex_info in REGEX_DICT.items():  
+            for regex_rule,regex_info in REGEX_DICT.items():
                 # get regex rule and function to extract episode and
                 regex=regex_info["regex"]
                 function=regex_info["function"]
@@ -163,14 +163,14 @@ def rename_video_files(info_dict,debug=False,save=True,ignore_folders=[],ignore_
                 #rename_dict
                 if regex_info["type"] == REGEX_TYPE_FILENAME:
                     regex_match=regex.findall(f_stem)
-                    if regex_match:                                            
+                    if regex_match:
                         series_episode=globals()[function](regex_match)
                 elif regex_info["type"] == REGEX_TYPE_TEXT and content:
                     for line in content:
                         regex_match=regex.findall(line)
-                        if regex_match:                               
+                        if regex_match:
                             series_episode=globals()[function](regex_match)
-                            break                        
+                            break
                 if series_episode:
                     name_new="S"+series_episode[0]+"E"+series_episode[1]+"_"+path_name+"."+f_type
 
@@ -189,7 +189,7 @@ def rename_video_files(info_dict,debug=False,save=True,ignore_folders=[],ignore_
                         print(f"#   {f} content:({len(content)}) ALREADY RENAMED")
                     rename_info_dict["old_name"]=f
                     if f!=name_new:
-                        rename_info_dict["new_name"]=name_new                        
+                        rename_info_dict["new_name"]=name_new
                         num_renames+=1
                     break
 
@@ -201,14 +201,14 @@ def rename_video_files(info_dict,debug=False,save=True,ignore_folders=[],ignore_
                 name_new=parsed_content.get("alt_name","")
                 if debug:
                     print(f"    No rule matched, use alt filename: {name_new}")
-                if name_new:                    
+                if name_new:
                     if f!=name_new:
                         rename_info_dict["new_name"]=name_new
                         num_renames+=1
-                        print(f"*   {f} content:({len(content)})")                        
+                        print(f"*   {f} content:({len(content)})")
                         print("    "+name_new)
                     else:
-                        print(f"#   {f} content:({len(content)}) ALREADY RENAMED")                        
+                        print(f"#   {f} content:({len(content)}) ALREADY RENAMED")
 
             rename_info[f]=rename_info_dict
 

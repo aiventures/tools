@@ -1,6 +1,7 @@
+""" delete subfolders including files """
 from tools import img_file_info_xls as img_info
-# deleting subfolders       
-fp=r"C:\<path to image folder>" 
+# deleting subfolders
+fp=r"C:\<path to image folder>"
 verbose=False
 delete_folder_list=["metadata"]
 prompt=True

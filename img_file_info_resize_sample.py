@@ -1,8 +1,8 @@
-""" 
-    Utility to create resized images 
-    using imagemagick 
+"""
+    Utility to create resized images
+    using imagemagick
     https://imagemagick.org/index.php
-    (needs to covered in Path variable ) 
+    (needs to covered in Path variable )
 """
 
 import os
@@ -18,7 +18,7 @@ save=True
 descriptions=True
 target_path=None
 
-#fp_images=r"C:\<.file path..>" 
+#fp_images=r"C:\<.file path..>"
 
 fp = v
 if not os.path.isdir(fp):
@@ -32,4 +32,3 @@ img_info.magick_resize(fp,magick=magick,image_size=image_size,
                   target_path=target_path)
 
 input("enter key to exit")
-

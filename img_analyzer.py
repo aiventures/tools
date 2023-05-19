@@ -74,7 +74,7 @@ class ImageAnalyzer():
         if not os.path.isdir(fp):
             log.error("%s is not a valid directory, exit",fp)
             return
-        # setting paths        
+        # setting paths
         self._fp = Path(fp).absolute()
         self._p_old = os.getcwd()
         p_analysis = ImageAnalyzer.P_ANALYSIS
@@ -269,7 +269,7 @@ class ImageAnalyzer():
         if ret_code == 0:
             cmd_out=runner.get_output()
         files_metadata={}
-        
+
         try:
             files_metadata=json.loads(cmd_out)
         except JSONDecodeError as e:
@@ -279,7 +279,7 @@ class ImageAnalyzer():
         for file_metadata in files_metadata:
 
             filename=Path(file_metadata["SourceFile"])
-            filename=filename.stem+"_ana"+filename.suffix            
+            filename=filename.stem+"_ana"+filename.suffix
             file_metadata["TargetFile"]=os.path.join(self._p_analysis,filename)
             file_metadata["FocusBox"]=ImageAnalyzer.get_focus_box(file_metadata)
             file_metadata["Description"]=ImageAnalyzer.create_analysis_text(file_metadata)

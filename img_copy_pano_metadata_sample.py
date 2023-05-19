@@ -1,10 +1,10 @@
-""" copying metadata from panorama files to exported image files 
+""" copying metadata from panorama files to exported image files
     (for example taken screenshots do not contain metadata)
 """
 from tools import img_file_info_xls as img_info
 
 max_level=1
-fp_root=r"C:\<path to your folder containing images>" 
+fp_root=r"C:\<path to your folder containing images>"
 exiftool="exiftool.exe"
 verbose=True
 save=True

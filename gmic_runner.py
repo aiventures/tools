@@ -1,4 +1,4 @@
-''' 
+'''
     GMIC RUNNER: Wrapper for GMIC Command Line (for Windows)
     References
     GMIC: https://gmic.eu
@@ -8,7 +8,7 @@
     Get specific filter(s wildcard) params as json file, eg get all filters containing filter_str as json
     gmic parse_gui json,filter_str output_text out.json
     Note that spaces in file names need to be escaped for example
-    gmic parse_gui json,Deformations/Continuous\ Droste output_text droste.json
+    gmic parse_gui json, Deformations Continuous Droste output_text droste.json
     to transform from cmyk to rgb add 'to_rgb' to execution pipeline (converts 32Bit to 24Bit)
 '''
 
@@ -74,19 +74,19 @@ QUOTE = '\"'
 
 def get_param_string_from_dict(filter_dict:dict,params_cust:dict={},
     as_dict:bool=False,verbose:bool=False):
-    """ transforms the filter list dictionary into comma separated parameter list 
+    """ transforms the filter list dictionary into comma separated parameter list
         if as_dict is set, list will be returned as key-value dictionary
-    """    
+    """
 
     params = filter_dict["parameters"]
     filter_name = filter_dict['name']
     command = filter_dict['command']
     if verbose:
         print("\n--------------")
-        print(f"{filter_name} ({command}), #params: {len(params)}\n")    
+        print(f"{filter_name} ({command}), #params: {len(params)}\n")
     param_num_last = 0
     param_list = []
-    param_name_list = []    
+    param_name_list = []
 
     for param in params:
         if verbose:
@@ -95,24 +95,24 @@ def get_param_string_from_dict(filter_dict:dict,params_cust:dict={},
         param_type = param.get("type")
 
         if param.get("pos") is None:
-            continue        
+            continue
 
         param_name = param['name']
         param_pos = int(param['pos'])
-        
+
         if param_pos>param_num_last:
             param_num_last = param_pos
         else:
             print("WARNING: WRONG PARAMETER ORDER")
 
-        param_value = param.get('default')        
+        param_value = param.get('default')
 
         if param_type == "point":
             param_value = param["position"]
         elif param_type == "text":
             param_value = QUOTE + param_value + QUOTE
 
-        if param_value:            
+        if param_value:
             try:
                 if param_type in STRING_PARAM_TYPES:
                     pass
@@ -122,21 +122,21 @@ def get_param_string_from_dict(filter_dict:dict,params_cust:dict={},
                 print(f"Conversion error for Param {param_name} <{param_type}>, value:{param_value}")
 
         param_cust = params_cust.get(param_name,None)
-        
+
         if param_cust:
             param_value = param_cust
-                        
+
         param_list.append(str(param_value))
         param_name_list.append(str(param_name))
 
     param_string = ",".join(param_list)
     param_dict = dict(zip(param_name_list,param_list))
-    
+
     if verbose:
         print("---- Output Parameters -----")
         print(pprint.pformat(param_dict,compact=True))
         #print(param_dict)
-        
+
     if as_dict:
         return param_dict
     else:
@@ -144,13 +144,13 @@ def get_param_string_from_dict(filter_dict:dict,params_cust:dict={},
 
 def get_dict_from_param_string(file_path:str,filter_file_name:str="filter.json",
                                filter_str=None,cust_value_dict:dict={},verbose=False):
-    """ reads filter command and parameters (as from gmix commandline or graphic client) 
+    """ reads filter command and parameters (as from gmix commandline or graphic client)
          and transforms it into a dictionary. Can be used to tweak the default value more easily
          file_path, file_name: Path pointing to filter json
          filter_str: Filter string
          cust_value_dict: Custom values in a dictionary. key corresponds to parameter name in json
          verbose: output of execution
-         returns params as filter dictionary 
+         returns params as filter dictionary
     """
     # get_dict_from_param_String()
     if verbose:
@@ -160,14 +160,14 @@ def get_dict_from_param_string(file_path:str,filter_file_name:str="filter.json",
     firstspace = filter_str.find(" ")
     command,param_s = filter_str[:firstspace],filter_str[firstspace:]
     param_list = list(map(str.strip,param_s.split(",")))
-    
+
     if verbose:
         print(command,":",param_list,"num params",len(param_list))
 
     filter_dict = read_filter_params(file_path,filter_file_name,command)
-    
 
-    # get a dataframe containing only params with "pos" 
+
+    # get a dataframe containing only params with "pos"
     df_params = pd.DataFrame.from_dict(filter_dict["parameters"])
     df_params.dropna(subset = ["pos"], inplace=True)
     df_params["pos"]=df_params[["pos"]].apply(pd.to_numeric,downcast="integer")
@@ -177,7 +177,7 @@ def get_dict_from_param_string(file_path:str,filter_file_name:str="filter.json",
     df_params["pos_diff"]=df_params["pos"].diff().shift(-1).fillna(1)
     # convert to int, get cumulated sum
     df_params[["pos","pos_diff"]]=df_params[["pos","pos_diff"]].apply(pd.to_numeric,downcast="integer")
-    # all objects with type point have a pos_diff of 2 
+    # all objects with type point have a pos_diff of 2
     df_params.loc[df_params["type"]=="point","pos_diff"]=2
     # cumulate
     df_params["pos_cum"]=df_params["pos_diff"].cumsum()
@@ -192,7 +192,7 @@ def get_dict_from_param_string(file_path:str,filter_file_name:str="filter.json",
     if  max_pos == cum_pos:
         if verbose:
             print(f"Max Pos is {max_pos} and the same as cumulated num of params, everything ok!")
-    else: 
+    else:
         print("Max Pos {max_pos} <> {cum_pos} (cumulated number of params, pls check !)")
 
     # now get a list with param name and ranges for given parameter, apply it to parameters in json
@@ -204,7 +204,7 @@ def get_dict_from_param_string(file_path:str,filter_file_name:str="filter.json",
         param_s = ",".join(param_list_s[(param_index[1]-1):param_index[2]])
         # overwrite with custom value
         custom_value = cust_value_dict.get(param_name)
-        if not (custom_value is None):
+        if not custom_value is None:
             param_s = str(custom_value)
 
         param_s = param_s.strip(QUOTE)
@@ -232,15 +232,15 @@ def get_dict_from_param_string(file_path:str,filter_file_name:str="filter.json",
                 param_dict[param_name_set] = param_s
                 s_param = str(param_index[1]).strip(QUOTE)
 
-                if not (param_index[1]==param_index[2]):
+                if not param_index[1]==param_index[2]:
                     s_param += ".."+str(param_index[2])
                 if verbose:
                     if  old_value == param_s:
                         print(f"({s_param.zfill(2)}) {param_name}:" +
-                              f" {param_s} (NO CHANGE)")                          
-                    else:    
+                              f" {param_s} (NO CHANGE)")
+                    else:
                         print(f"({s_param.zfill(2)}) {param_name}:" +
-                              f" {param_s} (old: {old_value})")            
+                              f" {param_s} (old: {old_value})")
                 break
 
     if verbose:
@@ -251,15 +251,15 @@ def get_dict_from_param_string(file_path:str,filter_file_name:str="filter.json",
     return filter_dict
 
 def get_param_list(filter_dict:dict,default_dict:bool=False,verbose=False):
-    """ gets the Parameter list from param dictionary 
+    """ gets the Parameter list from param dictionary
         for all control parameters
         if default_dict is set to true dictionary with default values is output
     """
     param_list = []
     default_list = []
-    
+
     filter_name = filter_dict['name']
-    command = filter_dict['command']    
+    command = filter_dict['command']
     params = filter_dict["parameters"]
     last_pos = 0
 
@@ -268,10 +268,10 @@ def get_param_list(filter_dict:dict,default_dict:bool=False,verbose=False):
 
     for param in params:
 
-        param_type = param["type"]        
+        param_type = param["type"]
         if param_type in SKIP_TYPES:
             continue
-   
+
         param_pos = int(param["pos"])
         param_name = param["name"]
         param_default = param["default"]
@@ -279,26 +279,26 @@ def get_param_list(filter_dict:dict,default_dict:bool=False,verbose=False):
         if param_pos < last_pos:
             print(f"wrong order, reading param {param_name}")
             continue
-            
+
         last_pos = param_pos
         param_list.append(param_name)
         if param_type == "float":
             param_default = float(param_default)
         elif (param_type == "int") or (param_type == "bool"):
             param_default = int(param_default)
-            
+
         default_list.append(param_default)
-        
+
         if verbose:
             print(f"({str(param_pos).zfill(2)}) {param_name} <{param_type}>: {param_default}")
-        
+
     if default_dict:
         return dict(zip(param_list,default_list))
     else:
         return param_list
 
 def process_image(file_path,file_in,file_out,filter_dict:dict,cust_params:dict=None):
-    """ executes the gmic filter and writes a new filtered image 
+    """ executes the gmic filter and writes a new filtered image
         returns status code """
     # get the params for given filter
     command = filter_dict['command']
@@ -327,13 +327,13 @@ def save_filter_params(filter_name:str,file_path:str,file_name:str="filter.json"
 
 def create_filter_params_json(file_name:str="filter_list.json",subfilters:str=None):
     """ convenience method to create the filter list with params as json
-        gmic parse_gui json output_text filter_list.json    
+        gmic parse_gui json output_text filter_list.json
         subfilters will only generate a subset or a single filter, eg subfilters='Artistic/'
         will only generate json for all Filters of Artistic category
         Output will be shown in standard output console during processing
     """
     filter_cats = "json"
-    if not (subfilters is None):
+    if not subfilters is None:
         filter_cats += ","+subfilters
 
     command_params = ["gmic","parse_gui",filter_cats,"output_text",file_name]
@@ -343,14 +343,14 @@ def create_filter_params_json(file_name:str="filter_list.json",subfilters:str=No
                universal_newlines=True) as p:
         for line in p.stdout:
             print(line, end='')
-    return p.returncode    
+    return p.returncode
 
 def read_filter_params(file_path:str,file_name:str="filter.json",filter_str=None,metadata=False,verbose=False):
-    """ reads filter parameter file from json 
+    """ reads filter parameter file from json
         will read only the first filter entry of the first category if filter_str is None
-        otherwise it will look either for command or name 
-        if metadata is true, filter + list of available filters is returned in a dictionary with 
-        command as key 
+        otherwise it will look either for command or name
+        if metadata is true, filter + list of available filters is returned in a dictionary with
+        command as key
     """
     filter_params = None
     fp = os.path.join(file_path,file_name)
@@ -380,7 +380,7 @@ def read_filter_params(file_path:str,file_name:str="filter.json",filter_str=None
 
             if (filter_dict is None) and \
                ((filter_str in gmic_dict["command"]) or (filter_str in gmic_dict["name"])):
-                filter_dict = gmic_filter        
+                filter_dict = gmic_filter
 
             if verbose:
                 print(f'     {gmic_dict["name"]} ({gmic_dict["command"]}), params:{gmic_dict["num_params"]}')
@@ -395,12 +395,12 @@ def read_filter_params(file_path:str,file_name:str="filter.json",filter_str=None
         out = {"filter_dict":filter_dict,"filter_list_dict":gmic_filter_list_dict}
     else:
         out = filter_dict
-    return out           
+    return out
 
 def rotate_droste(file_path,file_in,file_out,angle=180,cust_params:dict=None):
     """ Droste Filter: Creates a sequence of Droste Images with incremental rotation angle """
     angle_current = 0
-    # initialize cust params / at least rotation 
+    # initialize cust params / at least rotation
     if not cust_params:
         cust_params = {}
     file_prefix = file_out.split(".")[0]

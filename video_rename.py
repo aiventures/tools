@@ -1,10 +1,10 @@
-""" renaming of video files: extracts series, episode and total number of episodes 
+""" renaming of video files: extracts series, episode and total number of episodes
     and puts this info as file prefix """
 
 
 import re
 import os
-from image_meta.persistence import Persistence 
+from image_meta.persistence import Persistence
 
 def get_video_prefix(s, debug=False):
     """ Based on predefined pattern, get a video prefix (series,episode and total number) """
@@ -37,7 +37,7 @@ def get_video_prefix(s, debug=False):
 
     if debug:
         print(f"\n--- String: <{s}> ---")
-    result = {}   
+    result = {}
     for k, r in regex.items():
         if result:
             continue
@@ -56,13 +56,13 @@ def get_video_prefix(s, debug=False):
 
         if len(search) >= 1:
             if debug:
-                print("search result",search)            
+                print("search result",search)
             result[k] = search
 
     prefix = ""
     # map results
-    if result:        
-        k = list(result.keys())[0]       
+    if result:
+        k = list(result.keys())[0]
         result_list = list(map(lambda f:add_zeros(f),number_map[k](result[k])))
         result_prefix_list = list(zip(["S","E","_"],result_list))
         prefix = ""
@@ -72,7 +72,7 @@ def get_video_prefix(s, debug=False):
                 prefix += prefix_partial
         prefix += " "
         if debug:
-            print(f"regex pattern found: {k} / final prefix {prefix}")    
+            print(f"regex pattern found: {k} / final prefix {prefix}")
 
     return prefix
 
@@ -88,7 +88,7 @@ def rename_files(filepath, debug=False, use_parentname=True, rename=False):
     print("-------------")
     print(f"Filepath {filepath}")
 
-    fl = Persistence.get_file_list(path=filepath)    
+    fl = Persistence.get_file_list(path=filepath)
 
     for f in fl:
         f_info = Persistence.get_filepath_info(f)
@@ -110,6 +110,6 @@ def rename_files(filepath, debug=False, use_parentname=True, rename=False):
         print("OLD", fn_old[1+len(parent):])
         print("NEW", fn_new)
         if rename:
-            os.rename(fn_old, fp_new)   
+            os.rename(fn_old, fp_new)
 
     return None

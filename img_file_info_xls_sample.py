@@ -1,5 +1,5 @@
-""" 
-    Utility to rename original filenames 
+"""
+    Utility to rename original filenames
     PANORAMA FILES
     (signature IMG_YYYYMMDD_HHMMSS_00_###_*.(filetype) )
     STANDARD OUT OF CAM FILES
@@ -9,9 +9,9 @@
 import os
 from tools.simple_input import v
 from tools import img_file_info_xls as img_info
-import pandas as pd
+# import pandas as pd
 
-#fp_images=r"C:\<.file path..>" 
+#fp_images=r"C:\<.file path..>"
 
 fp = v
 if not os.path.isdir(fp):
@@ -34,4 +34,3 @@ if input("Rename (y)?") == 'y':
     print("    --- FILES RENAMED")
 
 input("enter key to exit")
-

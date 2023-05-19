@@ -442,7 +442,7 @@ class ImageFileValidator():
 
             # check for exif keyword profiles
             if not file_actions["META_PROFILES_FILE"]["done"]:
-                print("    No Exif Attributes Files / no json for EXIF profiles found")                
+                print("    No Exif Attributes Files / no json for EXIF profiles found")
                 print(f"    Check if file {config_dict.get('META_PROFILES_FILE','PATH NOT SET IN CONFIG')} exists")
             else:
                 # update keyword file in dialogue if it doesn't exist yet

@@ -54,7 +54,7 @@ def save_txt_file(filepath,data:str,encoding='utf-8'):
     except:
         print(f"Exception writing file {filepath}")
         print(traceback.format_exc())
-    return 
+    return
 
 def read_json(filepath:str):
     """ Reads JSON file"""

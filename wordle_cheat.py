@@ -7,7 +7,7 @@ def read_file(f:str)->list:
     """ reading UTF8 txt File """
     lines = []
     try:
-        with open(f,encoding="utf-8") as fp:    
+        with open(f,encoding="utf-8") as fp:
             for line in fp:
                 lines.append(line.strip().lower())
     except:
@@ -17,11 +17,13 @@ def read_file(f:str)->list:
     return lines
 
 def get_fixed_letter_regex(fixed_letters):
+    """" get fixed letters """
     ANY_LETTER = r"\w"
     fixed_letters_regex_s = fixed_letters.replace("*",ANY_LETTER)
     return "("+fixed_letters_regex_s+")"
 
 def get_misplaced_letter_regex(misplaced_letter_list):
+    """" get misplaced letters """
     ANY_LETTER = r"\w"
     misplaced_letters_regex_s = [s.replace("*",ANY_LETTER) for s in misplaced_letter_list]
     # [get_misplaced_letter_regex(pattern) for pattern in misplaced_letter_pattern]
@@ -29,16 +31,19 @@ def get_misplaced_letter_regex(misplaced_letter_list):
     return "".join(misplaced_letters_regex_s)
 
 def get_variable_letter_regex(variable_letters):
+    """" get variable letters """
     REGEX_MATCH_CHAR =r"(?=.*X)"
     variable_letters_regex_s = "".join([REGEX_MATCH_CHAR.replace("X",letter) for letter in variable_letters])
     return variable_letters_regex_s
 
 def get_missing_letter_regex(missing_letters):
+    """" get missing letters """
     REGEX_MATCH_CHAR = r"(?!.*X)"
     missing_letters_regex_s = "".join([REGEX_MATCH_CHAR.replace("X",letter) for letter in missing_letters])
     return missing_letters_regex_s
 
 def get_variable_letters(misplaced_letter_list):
+    """" get variable letters """
     variable_letters = ""
     letters = "".join(misplaced_letter_list).replace("*","")
     for letter in letters:
@@ -47,6 +52,7 @@ def get_variable_letters(misplaced_letter_list):
     return variable_letters
 
 def get_regex(misplaced_letter_list=[],fixed_letters="",missing_letters=""):
+    """ get regex """
     if len(fixed_letters) == 0:
         fixed_letters = "*****"
 
@@ -79,4 +85,4 @@ misplaced_letter_patterns = ["****s","**as*"]
 missing_letters = "enibt"
 regex = get_regex(misplaced_letter_patterns,fixed_letters,missing_letters)
 print("REGEX:",regex.pattern,"\n")
-print([word for word in words if regex.match(word)])    
+print([word for word in words if regex.match(word)])
