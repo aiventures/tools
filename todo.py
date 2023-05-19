@@ -41,6 +41,7 @@ class Todo:
 
             t_items = todo.strip().split()
             todo_dict = {}
+            todo_dict["changed"]=None
             first = True
             dates = []
             description = []
@@ -98,6 +99,14 @@ class Todo:
                         attributes[key] = date_value
                     except ValueError:
                         attributes[key] = value
+
+                    # set changed attrbiute in case we have line hash values from line and calculated
+                    if key == Todo.ATTRIBUTE_HASH:
+                        if value == todo_hash:
+                            todo_dict["changed"]=False
+                        else:
+                            todo_dict["changed"]=True
+
                 else:
                     key = None
                     value = None
