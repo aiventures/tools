@@ -12,6 +12,7 @@ from datetime import datetime
 
 class Todo:
     """ todo.txt transform string<->dict """
+    ATTRIBUTE_HASH="hash"
 
     @staticmethod
     def get_hash(s):
@@ -34,6 +35,10 @@ class Todo:
         for todo in todo_list:
             if not isinstance(todo, str):
                 continue
+
+            # hash value (calculated without hash attribute)
+            todo_hash = Todo.get_todo_hash(todo)
+
             t_items = todo.strip().split()
             todo_dict = {}
             first = True
@@ -113,7 +118,6 @@ class Todo:
             todo_dict["projects"] = projects
             todo_dict["attributes"] = attributes
 
-            todo_hash = Todo.get_hash(pp.pformat(todo_dict))
             todo_list_dict[todo_hash] = todo_dict
             if show_info:
                 print(f"\n --- Todo Dictionary, entry {todo_hash} ---")
@@ -123,12 +127,28 @@ class Todo:
         return todo_list_dict
 
     @staticmethod
-    def get_todo_from_dict(todo_list_dict: dict, show_info: bool = False):
+    def get_todo_hash(todo_s:str, show_info: bool = False):
+        """ Calculates Hash from Todo String (dropping spaces) """
+        # find and drop any hash property
+        REGEX_HASH=f"( {Todo.ATTRIBUTE_HASH}:\w+)"
+        hash_prop=re.findall(REGEX_HASH,todo_s)
+        if hash_prop:
+            todo_s=todo_s.replace(hash_prop[0],"")
+        hash_s=todo_s.strip()
+        hash_s=hash_s.replace(" ","")
+        hash_value=Todo.get_hash(hash_s)
+        if show_info:
+            print(f"String [{hash_s}], hash value ({hash_value})")
+        return hash_value
+
+    @staticmethod
+    def get_todo_from_dict(todo_list_dict: dict, show_info: bool = False, calc_hash:bool=True):
         """ transforms todo.txt dictionary back into lines of todo.txt strings """
         pp = pprint.PrettyPrinter(indent=4)
         todo_list = []
         if show_info:
             print("\n--- get_todo_from_dict ---")
+
         for k, v in todo_list_dict.items():
             todo_s = []
 
@@ -142,14 +162,25 @@ class Todo:
             if v["date_started"]:
                 todo_s.append(datetime.strftime(v["date_started"], "%Y-%m-%d"))
             todo_s.append(v["description"])
-            todo_s.extend(list(map(lambda li: "@"+li, v["contexts"])))
-            todo_s.extend(list(map(lambda li: "+"+li, v["projects"])))
+            if v["projects"]:
+                todo_s.extend(list(map(lambda li: "+"+li, v["projects"])))
+            if  v["contexts"]:
+                todo_s.extend(list(map(lambda li: "@"+li, v["contexts"])))
 
             for attr_k, attr_v in v["attributes"].items():
+                if attr_k == Todo.ATTRIBUTE_HASH:
+                    continue
+
                 if isinstance(attr_v, datetime):
                     attr_v = datetime.strftime(attr_v, "%Y-%m-%d")
                 todo_s.append((attr_k+":"+attr_v))
+
             todo_line = " ".join(todo_s)
+
+            if calc_hash:
+                hash_value=Todo.get_todo_hash(todo_line,show_info=False)
+                todo_line += " "+f"{Todo.ATTRIBUTE_HASH}:"+hash_value
+
             if show_info:
                 print(f"\n--- dictionary {k} to string ---")
                 pp.pprint(v)
