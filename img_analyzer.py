@@ -96,8 +96,8 @@ class ImageAnalyzer():
         """ magick executable """
         return self._magick
 
-    @exiftool.setter
-    def exiftool(self,magick):
+    @magick.setter
+    def magick(self,magick):
         self._magick = magick
 
     def copy_images(self,image_size:int=1000,quality:int=80):

@@ -12,6 +12,8 @@ from pathlib import Path
 #import subprocess
 import json
 import traceback
+import yaml
+from yaml import CLoader
 
 # https://superuser.com/questions/609447/how-to-install-the-win32com-python-library
 # pip install -U pypiwin32
@@ -55,6 +57,28 @@ def save_txt_file(filepath,data:str,encoding='utf-8'):
         print(f"Exception writing file {filepath}")
         print(traceback.format_exc())
     return
+
+
+def read_yaml(filepath:str):
+    """ Reads YAML file"""
+
+    if not os.path.isfile(filepath):
+        print(f"File path {filepath} does not exist. Exiting...")
+        return None
+
+    data = None
+
+    try:
+        with open(filepath, encoding='utf-8',mode='r') as stream:
+            data = yaml.load(stream,Loader=CLoader)
+
+    except:
+        print(f"**** Error opening {filepath} ****")
+        print(traceback.format_exc())
+        print("***************")
+
+    return data
+
 
 def read_json(filepath:str):
     """ Reads JSON file"""

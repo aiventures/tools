@@ -18,7 +18,7 @@ if not os.path.isdir(fp):
     fp=os.getcwd()
 print(f"--- delete all image metadata information, using directory: {fp}")
 
-# diosplay a preview of altered files
+# display a preview of altered files
 preview=True
 # exiftool executable should be in path
 exiftool="exiftool.exe"

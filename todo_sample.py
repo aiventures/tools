@@ -1,6 +1,11 @@
 """ sample program demoing todo.py """
 
+# from tools.todo import Todo
+from tools.todo import TodoConfig
+from tools.todo import TodoList
 from tools.todo import Todo
+import tools.file_module as fm
+import os
 
 todo_list = ["x  2020-12-02 2020-12-01 Python with Deskbike @Computer +Python @Deskbike +Health",
              "x  2020-12-02 2020-12-01 Python with Deskbike +Python +Health @Computer @Deskbike",
@@ -12,7 +17,21 @@ todo_list = ["x  2020-12-02 2020-12-01 Python with Deskbike @Computer +Python @D
              ]
 
 # transform from string list to dict
-todo_dict = Todo.get_dict_from_todo(todo_list, show_info=False)
+# todo_dict = Todo.get_dict_from_todo(todo_list, show_info=False)
 # transform back from dict to string
-todo_list = Todo.get_todo_from_dict(todo_dict, show_info=False,calc_hash=False)
-print("\n".join(todo_list))
+# todo_list = Todo.get_todo_from_dict(todo_dict, show_info=False,calc_hash=False)
+# print("\n".join(todo_list))
+
+# sample_task="x (B) 2023-05-23 2023-05-23 Sample Task +Project @Context1 @Context2 att1:value1 att2:value2 url:http://www.abc.com hash:12345abcdef"
+
+f=r"xxxx"
+# config=fm.read_yaml(f)
+
+todo_list = TodoList(f)
+todo_list.read_list(read_archive=True)
+#todo=todo_list.get_todo(4,as_string=False)
+# print(todo_list.get_todo(1,is_colored=False))
+todo_list.backup()
+
+# print(todo)
+print("END")
