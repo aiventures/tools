@@ -30,8 +30,8 @@ f=r"xxxx"
 todo_list = TodoList(f)
 todo_list.read_list(read_archive=True)
 #todo=todo_list.get_todo(4,as_string=False)
-# print(todo_list.get_todo(1,is_colored=False))
-todo_list.backup()
+todo_dict=todo_list.get_todo(2,as_dict=True)
+# todo_list.backup()
 
 # print(todo)
 print("END")

@@ -33,6 +33,10 @@ class TodoConfig:
     SETTINGS_SHOW_INFO="SHOW_INFO"
     SETTINGS_COLOR_MAP="COLOR_MAP"
     SETTINGS_ADD_CHANGE_DATE="DATE_CHANGED"
+    SETTINGS_CREATE_BACKUP="CREATE_BACKUP"
+    SETTINGS_TODO="SETTINGS_TODO"
+    SETTINGS_DEFAULT_PRIO="DEFAULT_PRIO"
+    SETTINGS_ADD_HASH="ADD_HASH"
 
     @staticmethod
     def get_filepath(p:str,f:str):
@@ -48,13 +52,17 @@ class TodoConfig:
 
     def __init__(self,f:str) -> None:
         """ constructor """
-        self._file_todo = None
-        self._file_archive = None
-        self._path_backup = None
-        self._todo_backup = None
-        self._archive_backup = None
-        self._color_map = None
-        self._show_info = False
+        self._file_todo = None # file path to todo.txt
+        self._file_archive = None # file path to todo archive
+        self._path_backup = None # path to backup files
+        self._todo_backup = None # base file name for todo backups
+        self._archive_backup = None # base file name for todo archive backup
+        self._color_map = None # mapping task segment to color
+        self._show_info = False # show verbose info should be replaced by log
+        self._date_changed = False # flag add date of changed when task was changed
+        self._create_backup = False # Flag if backup needs to be created
+        self._default_prio = "B" # Default Prio
+        self._add_hash = False # Add Hash Attribute to Todo
 
         if not os.path.isfile(f):
             print(f"Configuration {f}, is not a valid file")
@@ -91,6 +99,21 @@ class TodoConfig:
         """ color map """
         return self._color_map
 
+    @property
+    def date_changed(self):
+        """ flag: add date changed attribute  """
+        return self._date_changed
+
+    @property
+    def default_prio(self):
+        """ default priority  """
+        return self._default_prio
+
+    @property
+    def add_hash(self):
+        """ flag to add hash value  """
+        return self._add_hash
+
     @file_todo.setter
     def file_todo(self,f_todo):
         """ todo.txt file """
@@ -108,7 +131,7 @@ class TodoConfig:
 
     def create_todo_color_map(self,color_dict:dict, color_map:str):
         """ create a color map """
-        # TODO create color map
+        # TODO create color map for items with prio
         color_lookup=color_dict.get(TodoConfig.COLOR_DICT)
         if not color_lookup:
             print("No Color LookUp Table found, check yaml.COLORS.COLOR_DICT segment")
@@ -139,10 +162,19 @@ class TodoConfig:
 
         config_dict = fm.read_yaml(f)
         settings_dict = {}
+        self._color_map_name=TodoConfig.COLOR_MAP_DEFAULT
 
         if config_dict.get(TodoConfig.SETTINGS):
             settings_dict = config_dict.get(TodoConfig.SETTINGS)
             self._show_info = settings_dict.get(TodoConfig.SETTINGS_SHOW_INFO,False)
+            self._color_map_name=settings_dict.get(TodoConfig.SETTINGS_COLOR_MAP,TodoConfig.COLOR_MAP_DEFAULT)
+            self._date_changed = settings_dict.get(TodoConfig.SETTINGS_ADD_CHANGE_DATE,False)
+            self._create_backup = settings_dict.get(TodoConfig.SETTINGS_CREATE_BACKUP,False)
+
+        if config_dict.get(TodoConfig.SETTINGS_TODO):
+            settings_todo_dict = config_dict.get(TodoConfig.SETTINGS_TODO)
+            self._default_prio = settings_todo_dict.get(TodoConfig.SETTINGS_DEFAULT_PRIO,"B") # Default Prio
+            self._add_hash = settings_todo_dict.get(TodoConfig.SETTINGS_ADD_HASH,False) # Add Hash Attribute to Todo
 
         if config_dict.get(TodoConfig.TODO):
             c=config_dict.get(TodoConfig.TODO)
@@ -165,9 +197,8 @@ class TodoConfig:
             self._archive_backup = c.get(TodoConfig.ARCHIVE,"archive_backup.bak")
 
         if config_dict.get(TodoConfig.COLORS):
-            color_map = settings_dict.get(TodoConfig.SETTINGS_COLOR_MAP,TodoConfig.COLOR_MAP_DEFAULT)
-            colors = config_dict.get(TodoConfig.COLORS)
-            self._color_map=self.create_todo_color_map(colors,color_map)
+            color_dict = config_dict.get(TodoConfig.COLORS)
+            self._color_map=self.create_todo_color_map(color_dict,self._color_map_name)
 
     def is_config_valid(self)->bool:
         """ checks if config is valid / data are present"""
@@ -182,6 +213,10 @@ class TodoConfig:
             print("INVALID PATH TO BACKUP PATH, check configuration")
             is_valid = False
         return is_valid
+
+    # def __repr__(self)->str:
+    #     # TODO Add Repr
+    #     pass
 
 class Todo:
     """ todo.txt transform string<->dict """
@@ -208,7 +243,7 @@ class Todo:
     # PROPERTES TO BE USED AS OUTPUT FOR STRINF
     TODO_STRING_PROPERTIES=[ PROPERTY_COMPLETE, PROPERTY_PRIORITY, PROPERTY_DATE_COMPLETED,
                              PROPERTY_DATE_CREATED, PROPERTY_DESCRIPTION, PROPERTY_PROJECTS,
-                             PROPERTY_CONTEXTS, PROPERTY_ATTRIBUTES, PROPERTY_HASH]
+                             PROPERTY_CONTEXTS, PROPERTY_ATTRIBUTES, PROPERTY_DATE_CHANGED, PROPERTY_HASH]
     # SPECIAL CASES, PROPERTIES ARE LISTS
     TODO_LIST_PROPERTIES=[PROPERTY_PROJECTS,PROPERTY_CONTEXTS]
 
@@ -227,6 +262,36 @@ class Todo:
     #     return f'\x1b[{color}m{text}\x1b[0m'
 
     @staticmethod
+    def amend(todo_dict:dict,default_prio:str="B",add_date_change:bool=True)->dict:
+        """ adds default data if not present """
+        date_s=DateTime.now().strftime("%Y-%m-%d")
+        changed=False
+        # TODO add default Prio to Settings YAML
+        # default priority
+        if not todo_dict.get(Todo.PROPERTY_PRIORITY):
+            todo_dict[Todo.PROPERTY_PRIORITY]=default_prio
+            changed=True
+        # date created set to today
+        if not todo_dict.get(Todo.PROPERTY_DATE_CREATED):
+            todo_dict[Todo.PROPERTY_DATE_CREATED]=date_s
+            changed=True
+        # date completed if not set and task is completed
+        if todo_dict[Todo.PROPERTY_COMPLETE]:
+            if not todo_dict.get(Todo.PROPERTY_DATE_COMPLETED):
+                todo_dict[Todo.PROPERTY_DATE_COMPLETED] = date_s
+                changed=True
+        if changed:
+            todo_dict[Todo.PROPERTY_CHANGED]=True
+            if add_date_change:
+                todo_dict[Todo.PROPERTY_DATE_CHANGED]=date_s
+            # recalculate hash value
+            # TODO add show info flag
+            todo_s=Todo.get_todo(todo_dict)
+            todo_dict[Todo.PROPERTY_HASH]=Todo.get_todo_hash(todo_s,show_info=True)
+
+        return todo_dict
+
+    @staticmethod
     def get_todo(todo_dict:dict,color_map:dict=None):
         """ get colored todo using a color map
            if no map is supplied an unformatted string will be returned
@@ -242,7 +307,6 @@ class Todo:
         s_out=[]
         # TODO REFLECT CHANGED COLOR / needs to add project changed
         # TODO ADD DATE CHANGED
-        # TODO REFACTOR / also use this method for normal TODO DICT to String conversion
         # TODO COLOR TEXT Depending on Priority
         col_default=None
         if color_map:
@@ -259,6 +323,9 @@ class Todo:
             # treat special cases
             if key == Todo.PROPERTY_PRIORITY:
                 s=colorize("("+value+")",color)
+            elif key==Todo.PROPERTY_CHANGED:
+                # check if doing nothing is ok
+                continue
             elif key==Todo.PROPERTY_COMPLETE:
                 if value is True:
                     s=colorize("x",color)
@@ -287,6 +354,9 @@ class Todo:
                     s=colorize(prefix+item,color)
                     s_list.append(s)
                 s=" ".join(s_list)
+            elif key == Todo.PROPERTY_DATE_CHANGED:
+                # TODO ADD COLOR FOR CHANGED PROPERTY
+                s=colorize("changed:"+value,color)
             elif key == Todo.PROPERTY_HASH:
                 s=colorize("hash:"+value,color)
             else:
@@ -316,13 +386,28 @@ class Todo:
             if not isinstance(todo, str):
                 continue
 
-            # hash value (calculated without hash attribute)
-            todo_hash = Todo.get_todo_hash(todo)
-
-            t_items = todo.strip().split()
             todo_dict = {}
+            # hash value (calculated without hash attribute)
+            todo_hash = Todo.get_todo_hash(todo,show_info)
+
+            # check for patterns complete
+            todo_line=todo
+            if todo_line[0]=="x":
+                todo_dict[Todo.PROPERTY_COMPLETE] = True
+                todo_line=todo_line[1:].strip()
+            else:
+                todo_dict[Todo.PROPERTY_COMPLETE] = False
+
+            # check for Priority
+            prio_regex = re.search(r"^\((\w)\)", todo_line)
+            if prio_regex is None:
+                todo_dict[Todo.PROPERTY_PRIORITY] = None
+            else:
+                todo_dict[Todo.PROPERTY_PRIORITY] = todo_line[1]
+                todo_line = todo_line[3:]
+
+            t_items = todo_line.strip().split()
             todo_dict[Todo.PROPERTY_CHANGED]=None
-            first = True
             dates = []
             description = []
             contexts = []
@@ -330,22 +415,6 @@ class Todo:
             attributes = {}
 
             for item in t_items:
-
-                # special sematics: brackets and x as first elements
-                if first:
-                    first = False
-                    if item == "x":
-                        todo_dict[Todo.PROPERTY_COMPLETE] = True
-                        todo_dict[Todo.PROPERTY_PRIORITY] = None
-                        continue
-                    else:
-                        todo_dict[Todo.PROPERTY_COMPLETE] = False
-                        prio_regex = re.search(r"\((\w)\)", item)
-                        if prio_regex is None:
-                            todo_dict[Todo.PROPERTY_PRIORITY] = None
-                        else:
-                            todo_dict[Todo.PROPERTY_PRIORITY] = item[1]
-                            continue
 
                 # check if this is a date
                 date_regex = re.search(date_pattern, item)
@@ -426,7 +495,7 @@ class Todo:
     def get_todo_hash(todo_s:str, show_info: bool = False):
         """ Calculates Hash from Todo String (dropping spaces) """
         # find and drop any hash property
-        REGEX_HASH=f"( {Todo.ATTRIBUTE_HASH}:\w+)"
+        REGEX_HASH=f"( {Todo.ATTRIBUTE_HASH}:\\w+)"
         hash_prop=re.findall(REGEX_HASH,todo_s)
         if hash_prop:
             todo_s=todo_s.replace(hash_prop[0],"")
@@ -476,7 +545,7 @@ class Todo:
             todo_line = " ".join(todo_s)
 
             if calc_hash:
-                hash_value=Todo.get_todo_hash(todo_line,show_info=False)
+                hash_value=Todo.get_todo_hash(todo_line,show_info=show_info)
                 todo_line += " "+f"{Todo.ATTRIBUTE_HASH}:"+hash_value
 
             if show_info:
@@ -519,7 +588,7 @@ class TodoList():
         #   s=colorize(value.strftime("%Y-%m-%d"),color)
         prefix=DateTime.now().strftime("%Y%m%d_%H%M%S")+"_"
         # todo file / file with archived todos
-        p_backup = self._config._path_backup        
+        p_backup = self._config._path_backup
         f_todo=self._config._file_todo
         f_todo_backup=os.path.join(p_backup, prefix+self._config.todo_backup)
         f_todo_archive=self._config._file_archive
@@ -533,24 +602,28 @@ class TodoList():
         shutil.copy(src=f_todo,dst=f_todo_backup)
         shutil.copy(src=f_todo_archive,dst=f_todo_archive_backup)
 
-    # def get_todo_item(self,index:int,as_string:bool=False):
-    #     """ gets the todo item at requested index as dictionary or as output string """
-    #     # TODO Check index range
-    #     todo_out = self._todo_dict.get(index)
-    #     if as_string:
-    #         todo_out=Todo.get_todo_from_dict({1:todo_out})[0]
-    #     return todo_out
-
-    def get_todo(self,index:int,is_colored=False):
-        """ gets the item as color formatted todo """
+    def amend(self,index:int):
+        """ amend data with default data if missing """
         todo_dict = self._todo_dict.get(index)
-        if is_colored:
-            color_map=self._config.color_map
+        default_prio=self._config.default_prio
+        add_date_change=self._config.date_changed
+        if not todo_dict:
+            return
+        return Todo.amend(todo_dict,default_prio,add_date_change=add_date_change)
+
+    def get_todo(self,index:int,is_colored=False,as_dict=False):
+        """ gets the item as text / color formatted todo / dict item """
+        todo_dict = self._todo_dict.get(index)
+        if as_dict:
+            return todo_dict
         else:
             color_map=None
-        return Todo.get_todo(todo_dict,color_map)
+            if is_colored:
+                color_map=self._config.color_map
+            return Todo.get_todo(todo_dict,color_map)
 
     # TODO add method to return dataframe
-    # TODO add method for backup
     # TODO add method to list contexts and projects and properties
+    # TODO ADD METHOD TO ADD ITEM TO LIST
+    # TODO ADD METHOD TO REMOVE ITEM FROM LIST
 
