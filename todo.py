@@ -12,6 +12,8 @@ from pathlib import Path
 import os
 import shutil
 from datetime import datetime as DateTime
+from pandas import DataFrame
+from pandas.api.types import is_datetime64_any_dtype
 from tools import file_module as fm
 
 # d=DateTime.now().strftime("%Y%m%d_%H%M%S")
@@ -53,10 +55,10 @@ class TodoConfig:
     def __init__(self,f:str) -> None:
         """ constructor """
         self._file_todo = None # file path to todo.txt
-        self._file_archive = None # file path to todo archive
-        self._path_backup = None # path to backup files
         self._todo_backup = None # base file name for todo backups
+        self._file_archive = None # file path to todo archive
         self._archive_backup = None # base file name for todo archive backup
+        self._path_backup = None # path to backup files
         self._color_map = None # mapping task segment to color
         self._show_info = False # show verbose info should be replaced by log
         self._date_changed = False # flag add date of changed when task was changed
@@ -214,16 +216,49 @@ class TodoConfig:
             is_valid = False
         return is_valid
 
-    # def __repr__(self)->str:
-    #     # TODO Add Repr
-    #     pass
+    def _config_dict(self):
+
+        config_dict={
+          TodoConfig.TODO: {
+            TodoConfig.FILE:self.file_todo
+          },
+          TodoConfig.ARCHIVE: {
+            TodoConfig.FILE:self.file_archive
+          },
+          TodoConfig.BACKUP: {
+            TodoConfig.FILE:self.todo_backup,
+            TodoConfig.PATH:self.path_backup
+          },
+          TodoConfig.SETTINGS: {
+            TodoConfig.SETTINGS_SHOW_INFO:self._show_info,
+            TodoConfig.SETTINGS_COLOR_MAP:self._color_map_name,
+            TodoConfig.SETTINGS_ADD_CHANGE_DATE:self.date_changed,
+            TodoConfig.SETTINGS_CREATE_BACKUP:self._create_backup
+          },
+          TodoConfig.SETTINGS_TODO: {
+            TodoConfig.SETTINGS_DEFAULT_PRIO:self.default_prio,
+            TodoConfig.SETTINGS_ADD_HASH:self.add_hash
+          },
+          TodoConfig.COLORS: self.color_map
+        }
+
+        return config_dict
+
+    def __repr__(self)->str:
+        return pprint.pformat(self._config_dict(),indent=4)
 
 class Todo:
     """ todo.txt transform string<->dict """
     ATTRIBUTE_HASH="hash"
+    ATTRIBUTE_DATE_CHANGED="changed"
 
     # property list
     PROPERTY_COMPLETE = "COMPLETE"
+    PROPERTY_DATE_LIST = "DATES"
+    PROPERTY_TASKS = "TASKS"
+    PROPERTY_TOTAL = "TOTAL TASKS"
+    PROPERTY_OPEN = "OPEN TASKS"
+    PROPERTY_COMPLETED = "COMPLETED TASKS"
     PROPERTY_CHANGED = "CHANGED"
     PROPERTY_PRIORITY = "PRIO"
     PROPERTY_DATE_COMPLETED = "DATE_COMPLETED"
@@ -253,7 +288,6 @@ class Todo:
         hash_object = hashlib.md5(s.encode())
         return hash_object.hexdigest()
 
-    # TODO function to Supply Default Values to todo
     # TODO add method to colorize todo tools_console > todo_txt.py
 
     # @staticmethod
@@ -262,32 +296,39 @@ class Todo:
     #     return f'\x1b[{color}m{text}\x1b[0m'
 
     @staticmethod
-    def amend(todo_dict:dict,default_prio:str="B",add_date_change:bool=True)->dict:
+    def amend(todo_dict:dict,default_prio:str="B",add_date_change:bool=True,show_info:bool=False)->dict:
         """ adds default data if not present """
         date_s=DateTime.now().strftime("%Y-%m-%d")
-        changed=False
-        # TODO add default Prio to Settings YAML
+
         # default priority
         if not todo_dict.get(Todo.PROPERTY_PRIORITY):
             todo_dict[Todo.PROPERTY_PRIORITY]=default_prio
-            changed=True
+
         # date created set to today
         if not todo_dict.get(Todo.PROPERTY_DATE_CREATED):
             todo_dict[Todo.PROPERTY_DATE_CREATED]=date_s
-            changed=True
+
         # date completed if not set and task is completed
         if todo_dict[Todo.PROPERTY_COMPLETE]:
             if not todo_dict.get(Todo.PROPERTY_DATE_COMPLETED):
                 todo_dict[Todo.PROPERTY_DATE_COMPLETED] = date_s
-                changed=True
-        if changed:
+
+        # sprt contexts and projects
+        if todo_dict.get(Todo.PROPERTY_CONTEXTS):
+            todo_dict[Todo.PROPERTY_CONTEXTS]=sorted(todo_dict[Todo.PROPERTY_CONTEXTS])
+        if todo_dict.get(Todo.PROPERTY_PROJECTS):
+            todo_dict[Todo.PROPERTY_PROJECTS]=sorted(todo_dict[Todo.PROPERTY_PROJECTS])
+
+        new_todo_s=Todo.get_todo(todo_dict)
+        original_todo_s = todo_dict.get(Todo.PROPERTY_ORIGINAL,"")
+
+        if new_todo_s != original_todo_s:
             todo_dict[Todo.PROPERTY_CHANGED]=True
             if add_date_change:
                 todo_dict[Todo.PROPERTY_DATE_CHANGED]=date_s
             # recalculate hash value
-            # TODO add show info flag
             todo_s=Todo.get_todo(todo_dict)
-            todo_dict[Todo.PROPERTY_HASH]=Todo.get_todo_hash(todo_s,show_info=True)
+            todo_dict[Todo.PROPERTY_HASH]=Todo.get_todo_hash(todo_s,show_info=show_info)
 
         return todo_dict
 
@@ -306,7 +347,6 @@ class Todo:
 
         s_out=[]
         # TODO REFLECT CHANGED COLOR / needs to add project changed
-        # TODO ADD DATE CHANGED
         # TODO COLOR TEXT Depending on Priority
         col_default=None
         if color_map:
@@ -319,6 +359,10 @@ class Todo:
             value = todo_dict.get(key)
             if value is None:
                 continue
+
+            # convert to string
+            if isinstance(value,DateTime):
+                value=value.strftime("%Y-%m-%d")
 
             # treat special cases
             if key == Todo.PROPERTY_PRIORITY:
@@ -338,6 +382,8 @@ class Todo:
             elif key == Todo.PROPERTY_ATTRIBUTES:
                 s_prop_list=[]
                 for k_prop,v_prop in value.items():
+                    if isinstance(v_prop,DateTime):
+                        v_prop=v_prop.strftime("%Y-%m-%d")
                     # skip old hash value
                     if k_prop.upper() == Todo.PROPERTY_HASH.upper():
                         continue
@@ -356,7 +402,7 @@ class Todo:
                 s=" ".join(s_list)
             elif key == Todo.PROPERTY_DATE_CHANGED:
                 # TODO ADD COLOR FOR CHANGED PROPERTY
-                s=colorize("changed:"+value,color)
+                s=colorize(Todo.ATTRIBUTE_DATE_CHANGED+value,color)
             elif key == Todo.PROPERTY_HASH:
                 s=colorize("hash:"+value,color)
             else:
@@ -431,11 +477,11 @@ class Todo:
                 if item[0] == "+":
                     if not item[1:] in projects:
                         projects.append(item[1:])
-                        continue
+                    continue
                 if item[0] == "@":
                     if not item[1:] in contexts:
                         contexts.append(item[1:])
-                        continue
+                    continue
 
                 # check for attrbiutes with quotes
                 attribute_regex = re.findall(attribute_pattern_quote, item)
@@ -450,6 +496,10 @@ class Todo:
                         attributes[key] = date_value
                     except ValueError:
                         attributes[key] = value
+
+                    # special case attribute is date_changed
+                    if key == Todo.ATTRIBUTE_DATE_CHANGED:
+                        todo_dict[Todo.PROPERTY_DATE_CHANGED]=value
 
                     # set changed attrbiute in case we have line hash values from line and calculated
                     if key == Todo.ATTRIBUTE_HASH:
@@ -556,6 +606,8 @@ class Todo:
 
         return sorted(todo_list, key=str.lower, reverse=False)
 
+
+
 class TodoList():
     """ Handling of Todo List including Filehandling """
 
@@ -587,7 +639,6 @@ class TodoList():
         """ Creates a backup """
         #   s=colorize(value.strftime("%Y-%m-%d"),color)
         prefix=DateTime.now().strftime("%Y%m%d_%H%M%S")+"_"
-        # todo file / file with archived todos
         p_backup = self._config._path_backup
         f_todo=self._config._file_todo
         f_todo_backup=os.path.join(p_backup, prefix+self._config.todo_backup)
@@ -609,21 +660,102 @@ class TodoList():
         add_date_change=self._config.date_changed
         if not todo_dict:
             return
-        return Todo.amend(todo_dict,default_prio,add_date_change=add_date_change)
+        return Todo.amend(todo_dict,default_prio,add_date_change=add_date_change,show_info=self._show_info)
 
-    def get_todo(self,index:int,is_colored=False,as_dict=False):
-        """ gets the item as text / color formatted todo / dict item """
-        todo_dict = self._todo_dict.get(index)
+    def get_todo(self,index:int,is_colored=False,as_dict=False,as_json=False):
+        """ gets the item as text / color formatted todo / dict item / json
+        """
+
+        # todo_dict = self._todo_dict.get(index,{})
+        todo_dict = self.amend(index)
+
         if as_dict:
             return todo_dict
+        elif as_json:
+            return pprint.pformat(todo_dict,indent=4)
         else:
             color_map=None
             if is_colored:
                 color_map=self._config.color_map
             return Todo.get_todo(todo_dict,color_map)
 
-    # TODO add method to return dataframe
-    # TODO add method to list contexts and projects and properties
+    def print_config(self)->str:
+        """ prints config generated from yaml configuration """
+        print(repr(self._config))
+
+    def get_df(self)->DataFrame:
+        """ returns todo list as data frame """
+        df = DataFrame.from_dict(self._todo_dict,orient="index")
+        return df
+
+    def get_stats(self,as_json=False):
+        """ returns todo list stats """
+
+        def get_list_counts(columns,df):
+            """ create occurences of attributes in list """
+            out_dict={}
+            for column in columns:
+                if not column in df.columns:
+                    continue
+                list_items=df[column].sum()
+                count_dict={}
+                for key in set(list_items):
+                    count_dict[key]=list_items.count(key)
+                out_dict[column]=count_dict
+            return out_dict
+
+        df = self.get_df()
+
+        # task stats
+        list_counts={}
+        task_dict={}
+        task_dict[Todo.PROPERTY_TOTAL]=df.shape[0]
+        task_dict[Todo.PROPERTY_COMPLETED]=(df[Todo.PROPERTY_COMPLETE] == True).sum()
+        task_dict[Todo.PROPERTY_OPEN]=(df[Todo.PROPERTY_COMPLETE] == False).sum()
+        list_counts[Todo.PROPERTY_TASKS]=task_dict
+
+        # number of prios
+        prio_list=[p for p in list(df["PRIO"].unique()) if p is not None]
+        prio_dict={}
+        for prio in prio_list:
+            prio_dict[prio]=(df[Todo.PROPERTY_PRIORITY]==prio).sum()
+        list_counts[Todo.PROPERTY_PRIORITY]=prio_dict
+
+        list_columns=[Todo.PROPERTY_PROJECTS,Todo.PROPERTY_CONTEXTS]
+        list_counts={**list_counts,**get_list_counts(list_columns,df)}
+
+        # attributes list
+        list_counts[Todo.PROPERTY_ATTRIBUTES]={}
+        attributes=df[Todo.PROPERTY_ATTRIBUTES].apply(lambda d:list(d.keys()) if isinstance(d,dict) else []).sum()
+        for attribute in set(attributes):
+            list_counts[Todo.PROPERTY_ATTRIBUTES][attribute]=attributes.count(attribute)
+
+        # dates list
+        list_columns=[Todo.PROPERTY_DATE_CREATED,Todo.PROPERTY_DATE_COMPLETED,Todo.PROPERTY_DATE_CHANGED]
+        dates_dict={}
+        for column in list_columns:
+            if not column in df.columns:
+                continue
+            # get list of dates as string
+            dates=df[df[column].notna()][column]
+            if (is_datetime64_any_dtype(df[column].dtype)):
+                date_strings=list(dates.apply(lambda dt:dt.strftime("%Y-%m-%d")))
+            else:
+                date_strings= list(dates.astype(str))
+
+            date_dict={}
+            for date_s in set(date_strings):
+                date_dict[date_s]=date_strings.count(date_s)
+            dates_dict[column]=date_dict
+
+        list_counts[Todo.PROPERTY_DATE_LIST] = dates_dict
+
+        if as_json:
+            return pprint.pformat(list_counts,indent=4)
+        else:
+            return list_counts
+
     # TODO ADD METHOD TO ADD ITEM TO LIST
     # TODO ADD METHOD TO REMOVE ITEM FROM LIST
+    # TODO ADD QUERY MODULE
 
