@@ -23,6 +23,7 @@ class TodoConfig:
     """ Todo.Txt Config Class """
     # variable used as reference and to identify yaml
     TODO="TODO"
+    FILTER="FILTER"
     ARCHIVE="ARCHIVE"
     BACKUP="BACKUP"
     FILE="FILE"
@@ -32,6 +33,8 @@ class TodoConfig:
     COLOR_MAP_DEFAULT="TODO_COLORS_DEFAULT"
     COLOR_DEFAULT = "COLOR_DEFAULT"
     SETTINGS="SETTINGS"
+    FILE_SETTINGS="FILE_SETTINGS"    
+    PROPERTIES="PROPERTIES"
     SETTINGS_SHOW_INFO="SHOW_INFO"
     SETTINGS_COLOR_MAP="COLOR_MAP"
     SETTINGS_ADD_CHANGE_DATE="DATE_CHANGED"
@@ -65,11 +68,18 @@ class TodoConfig:
         self._create_backup = False # Flag if backup needs to be created
         self._default_prio = "B" # Default Prio
         self._add_hash = False # Add Hash Attribute to Todo
+        self._filter_config = None # Filter Configuration
+        self._properties = None # Filter Configuration
 
         if not os.path.isfile(f):
             print(f"Configuration {f}, is not a valid file")
             return
         self.read_config(f)
+
+    @property
+    def filter(self):
+        """ filter object """
+        return self._filter
 
     @property
     def todo_backup(self):
@@ -202,6 +212,13 @@ class TodoConfig:
             color_dict = config_dict.get(TodoConfig.COLORS)
             self._color_map=self.create_todo_color_map(color_dict,self._color_map_name)
 
+        if config_dict.get(TodoConfig.PROPERTIES):
+            self._properties = config_dict.get(TodoConfig.PROPERTIES)
+
+        if config_dict.get(TodoConfig.FILTER):
+            self._filter_config = config_dict.get(TodoConfig.FILTER)
+            self._filter = TodoFilter(self._filter_config,self._show_info,self._properties)
+
     def is_config_valid(self)->bool:
         """ checks if config is valid / data are present"""
         is_valid = True
@@ -219,16 +236,17 @@ class TodoConfig:
     def _config_dict(self):
 
         config_dict={
-          TodoConfig.TODO: {
-            TodoConfig.FILE:self.file_todo
-          },
-          TodoConfig.ARCHIVE: {
-            TodoConfig.FILE:self.file_archive
-          },
-          TodoConfig.BACKUP: {
-            TodoConfig.FILE:self.todo_backup,
-            TodoConfig.PATH:self.path_backup
-          },
+        TodoConfig.FILE_SETTINGS:{
+            TodoConfig.TODO: {
+                TodoConfig.FILE:self.file_todo
+            },
+            TodoConfig.ARCHIVE: {
+                TodoConfig.FILE:self.file_archive
+            },
+            TodoConfig.BACKUP: {
+              TodoConfig.FILE:self.todo_backup,
+              TodoConfig.PATH:self.path_backup
+            }},
           TodoConfig.SETTINGS: {
             TodoConfig.SETTINGS_SHOW_INFO:self._show_info,
             TodoConfig.SETTINGS_COLOR_MAP:self._color_map_name,
@@ -239,7 +257,9 @@ class TodoConfig:
             TodoConfig.SETTINGS_DEFAULT_PRIO:self.default_prio,
             TodoConfig.SETTINGS_ADD_HASH:self.add_hash
           },
-          TodoConfig.COLORS: self.color_map
+          TodoConfig.COLORS: self.color_map,
+          TodoConfig.PROPERTIES: self._properties,
+          TodoConfig.FILTER: self._filter.get_filter_settings_dict()
         }
 
         return config_dict
@@ -272,6 +292,7 @@ class Todo:
     PROPERTY_HASH = "HASH"
     PROPERTY_ORIGIN = "ORIGIN"
     PROPERTY_ORIGINAL = "ORIGINAL"
+    PROPERTY_NEW = "NEW"
     PROPERTY_INDEX = "INDEX"
 
 
@@ -313,7 +334,7 @@ class Todo:
             if not todo_dict.get(Todo.PROPERTY_DATE_COMPLETED):
                 todo_dict[Todo.PROPERTY_DATE_COMPLETED] = date_s
 
-        # sprt contexts and projects
+        # sort contexts and projects
         if todo_dict.get(Todo.PROPERTY_CONTEXTS):
             todo_dict[Todo.PROPERTY_CONTEXTS]=sorted(todo_dict[Todo.PROPERTY_CONTEXTS])
         if todo_dict.get(Todo.PROPERTY_PROJECTS):
@@ -402,14 +423,13 @@ class Todo:
                 s=" ".join(s_list)
             elif key == Todo.PROPERTY_DATE_CHANGED:
                 # TODO ADD COLOR FOR CHANGED PROPERTY
-                s=colorize(Todo.ATTRIBUTE_DATE_CHANGED+value,color)
+                s=colorize(Todo.ATTRIBUTE_DATE_CHANGED+":"+value,color)
             elif key == Todo.PROPERTY_HASH:
                 s=colorize("hash:"+value,color)
             else:
                 s=colorize(value,color)
-
-            s_out.append(s)
-
+            if s:
+                s_out.append(s)
         return " ".join(s_out)
 
     @staticmethod
@@ -529,10 +549,11 @@ class Todo:
             todo_dict[Todo.PROPERTY_ATTRIBUTES] = attributes
             if origin:
                 todo_dict[Todo.PROPERTY_ORIGIN] = origin
-            todo_dict[Todo.PROPERTY_ORIGINAL] = todo
+            todo_dict[Todo.PROPERTY_ORIGINAL] = todo.strip()
             todo_dict[Todo.PROPERTY_HASH] = todo_hash
             todo_dict[Todo.PROPERTY_INDEX] = index
             todo_list_dict[index] = todo_dict
+
             index += 1
             if show_info:
                 print(f"\n --- Todo Dictionary, entry {todo_hash} ---")
@@ -619,6 +640,7 @@ class TodoList():
         self._config.is_config_valid()
         self._todo_dict = {}
         self._archive_dict = {}
+        self._counter = 0
 
     def read_list(self,read_archive:bool=False):
         """ reads todo list from todo.txt file  """
@@ -628,12 +650,19 @@ class TodoList():
         todo_list = fm.read_txt_file(f_todo)
 
         self._todo_dict = Todo.get_dict_from_todo(todo_list,self._show_info,origin=TodoConfig.TODO)
+        self._counter = len(self._todo_dict )
+
+        # create amend version of todo
+        for index, todo_dict_item in self._todo_dict.items():
+            todo_dict_item[Todo.PROPERTY_NEW]=self.get_todo(index)
 
         if read_archive:
-            start_index = len(self._todo_dict) + 1
+            start_index = 1
             f_archive=self._config._file_archive
             archive_list = fm.read_txt_file(f_archive)
             self._archive_dict = Todo.get_dict_from_todo(archive_list,self._show_info,origin=TodoConfig.ARCHIVE,start_index=start_index)
+            for index, arch_dict_item in self._archive_dict.items():
+                arch_dict_item[Todo.PROPERTY_NEW]=self.get_todo(index)
 
     def backup(self):
         """ Creates a backup """
@@ -758,4 +787,120 @@ class TodoList():
     # TODO ADD METHOD TO ADD ITEM TO LIST
     # TODO ADD METHOD TO REMOVE ITEM FROM LIST
     # TODO ADD QUERY MODULE
+    # TODO ARCHIVE ITEMS
 
+class TodoFilter():
+    """ Filtering Todo Items """
+
+    # Filter VALUES
+    # TYPE="TYPE"               # filter type, allowed: REGEX, DATE, VALUE
+    PROPERTY="PROPERTY"         # property name to be filtered (Any of the PROPERTY_... values)
+    PROPERTY_ORIGINAL="PROPERTY_ORIGINAL"  # property name to be filtered (Any of the PROPERTY_... values)
+    REGEX="REGEX"               # will use REGEX filter
+    DATE_FROM="DATE_FROM"       # begin of date range, is today if not supplied
+    DATE_TO="DATE_TO"           # end of date range, is today if not supplied
+    INCLUDE="INCLUDE"           # include search to pass, values: true (DEFAULT) or false  (then it's excluded)
+    VALUE="VALUE"               # will search for value to be filtered
+
+    # Keys for Dict Access
+    FILTER="FILTER"
+    FILTER_LIST="FILTER_LIST" # Single Filter Rules
+    FILTER_SETS="FILTER_SETS" # FILTER SETS
+
+    VALID_FILTER_ROPERTIES = [PROPERTY,REGEX,INCLUDE,DATE_FROM,DATE_TO,VALUE]
+
+    def __init__(self,filter_config:dict,show_info:bool=False, property_list:list=None) -> None:
+        """ Constructor gets filter settings from TodoConfig """
+        self._filter_config = filter_config
+        self._filter_dict = None
+        self._filter_sets = None
+        self._show_info = show_info
+        self._property_list = property_list
+
+        if not filter_config:
+            if self._show_info:
+                print("No Filter Configuration")
+
+        # parse all filters
+        self._parse_config_dict(self._filter_config)
+
+    def _parse_config_dict(self,filter_config:dict):
+        """ complement and validate filter list """
+
+        filter_list=filter_config.get(TodoFilter.FILTER_LIST)
+        if not filter_list:
+            print("*** NO FILTER LIST FOUND")
+            return
+
+        filter_sets=filter_config.get(TodoFilter.FILTER_SETS)
+        if not filter_sets:
+            print("*** NO FILTER SETS FOUND")
+
+
+        self._filter_dict = {}
+        for filter_name , filter_properties in filter_list.items():
+            if self._show_info:
+                print(f"### Configuring Filter {filter_name}")
+
+            # check for correct FILTER LIST PROPERTIES
+            filter_property_keys=list(filter_properties.keys())
+            props_valid = [prop in TodoFilter.VALID_FILTER_ROPERTIES for prop in filter_property_keys]
+            if not all(props_valid):
+                print(f"Filter {filter_name} has invalid attributes: {filter_property_keys}, pls check")
+                continue
+
+
+            if not filter_properties.get(TodoFilter.PROPERTY):
+                if self._show_info:
+                    print(f"Filter: {filter_name}, no PROPERTY found, will be set to ORIGINAL TODO Line")
+                filter_properties[TodoFilter.PROPERTY]=TodoFilter.PROPERTY_ORIGINAL
+
+            # CHECK FOR CORRECT PROPERTY  FIELDS IF LIST AVAILABLE
+            if self._property_list:
+               property = filter_properties.get(TodoFilter.PROPERTY)
+               if not property in self._property_list:
+                   print(f"Filter: {filter_name}, PROPERTY with value {property} can not be validated, check")
+                   continue
+
+            filter_properties[TodoFilter.INCLUDE] = filter_properties.get(TodoFilter.INCLUDE,True)
+
+            # set appropriate values for different filter type
+            if filter_properties.get(TodoFilter.VALUE):
+                pass
+            elif filter_properties.get(TodoFilter.REGEX):
+                pass
+            elif filter_properties.get(TodoFilter.DATE_FROM) or filter_properties.get(TodoFilter.DATE_TO):
+                pass
+
+            self._filter_dict[filter_name] = filter_properties
+
+        if filter_sets:
+            self._filter_sets={}
+            # cross check for correct filter sets
+            valid_filters = self._filter_dict.keys()
+            #self._filter_sets = self._filter_config.get(TodoFilter.FILTER_SETS)
+
+            for filterset_name, filter_list in filter_sets.items():
+                if self._show_info:
+                    print(f"### Check Filter Set {filterset_name}")
+                exist = [v in valid_filters for v in filter_list]
+                if not (all(exist)):
+                    print(f"### FILTERSET {filterset_name} contains invalid filter references and will be ignored please check")
+                    continue
+                self._filter_sets[filterset_name]=filter_list
+
+        pass
+
+    def get_filter_settings_dict(self):
+        """ returns validated filter data """
+        return {
+           TodoFilter.FILTER_LIST: self._filter_dict,
+           TodoFilter.FILTER_SETS: self._filter_sets
+        }
+
+    def __repr__(self)->str:
+        return pprint.pformat(self.get_filter_settings_dict(),indent=4)
+
+    # TODO ADD filters for regex
+    # TODO add date filter
+    # TODO Validate Attributes using config.yaml
