@@ -12,6 +12,7 @@ from pathlib import Path
 import os
 import shutil
 from datetime import datetime as DateTime
+from datetime import timedelta as TimeDelta
 from pandas import DataFrame
 from pandas.api.types import is_datetime64_any_dtype
 from tools import file_module as fm
@@ -33,7 +34,7 @@ class TodoConfig:
     COLOR_MAP_DEFAULT="TODO_COLORS_DEFAULT"
     COLOR_DEFAULT = "COLOR_DEFAULT"
     SETTINGS="SETTINGS"
-    FILE_SETTINGS="FILE_SETTINGS"    
+    FILE_SETTINGS="FILE_SETTINGS"
     PROPERTIES="PROPERTIES"
     SETTINGS_SHOW_INFO="SHOW_INFO"
     SETTINGS_COLOR_MAP="COLOR_MAP"
@@ -295,8 +296,31 @@ class Todo:
     PROPERTY_NEW = "NEW"
     PROPERTY_INDEX = "INDEX"
 
+    PROPERTY_DICT = {
+        "PROPERTY_COMPLETE" : "COMPLETE",
+        "PROPERTY_DATE_LIST" : "DATES",
+        "PROPERTY_TASKS" : "TASKS",
+        "PROPERTY_TOTAL" : "TOTAL TASKS",
+        "PROPERTY_OPEN" : "OPEN TASKS",
+        "PROPERTY_COMPLETED" : "COMPLETED TASKS",
+        "PROPERTY_CHANGED" : "CHANGED",
+        "PROPERTY_PRIORITY" : "PRIO",
+        "PROPERTY_DATE_COMPLETED" : "DATE_COMPLETED",
+        "PROPERTY_DATE_CREATED" : "DATE_CREATED",
+        "PROPERTY_DESCRIPTION" : "DESCRIPTION",
+        "PROPERTY_LINKS " : "LINKS",
+        "PROPERTY_PROJECTS " : "PROJECTS",
+        "PROPERTY_CONTEXTS " : "CONTEXTS",
+        "PROPERTY_ATTRIBUTES " : "ATTRIBUTES",
+        "PROPERTY_DATE_CHANGED" : "DATE_CHANGED",
+        "PROPERTY_HASH" : "HASH",
+        "PROPERTY_ORIGIN" : "ORIGIN",
+        "PROPERTY_ORIGINAL" : "ORIGINAL",
+        "PROPERTY_NEW" : "NEW",
+        "PROPERTY_INDEX" : "INDEX"
+    }    
 
-    # PROPERTES TO BE USED AS OUTPUT FOR STRINF
+    # PROPERTES TO BE USED AS OUTPUT FOR STRING
     TODO_STRING_PROPERTIES=[ PROPERTY_COMPLETE, PROPERTY_PRIORITY, PROPERTY_DATE_COMPLETED,
                              PROPERTY_DATE_CREATED, PROPERTY_DESCRIPTION, PROPERTY_PROJECTS,
                              PROPERTY_CONTEXTS, PROPERTY_ATTRIBUTES, PROPERTY_DATE_CHANGED, PROPERTY_HASH]
@@ -688,6 +712,7 @@ class TodoList():
         default_prio=self._config.default_prio
         add_date_change=self._config.date_changed
         if not todo_dict:
+            print(f"Couldn't find Todo Item at index {index}")
             return
         return Todo.amend(todo_dict,default_prio,add_date_change=add_date_change,show_info=self._show_info)
 
@@ -714,6 +739,7 @@ class TodoList():
 
     def get_df(self)->DataFrame:
         """ returns todo list as data frame """
+        # TODO fix warning
         df = DataFrame.from_dict(self._todo_dict,orient="index")
         return df
 
@@ -767,7 +793,7 @@ class TodoList():
                 continue
             # get list of dates as string
             dates=df[df[column].notna()][column]
-            if (is_datetime64_any_dtype(df[column].dtype)):
+            if is_datetime64_any_dtype(df[column].dtype):
                 date_strings=list(dates.apply(lambda dt:dt.strftime("%Y-%m-%d")))
             else:
                 date_strings= list(dates.astype(str))
@@ -784,30 +810,44 @@ class TodoList():
         else:
             return list_counts
 
+    def filter(self,index:int,filter_set_name:str,search_term:str=None):
+        """ filter item at index using filter set """
+        todo_dict=self.get_todo(index,as_dict=True)
+        if not todo_dict:
+            return
+        todo_filter = self._config._filter
+        is_filtered = todo_filter.filter(todo_dict,filter_set_name,search_term)
+        return is_filtered
+
     # TODO ADD METHOD TO ADD ITEM TO LIST
     # TODO ADD METHOD TO REMOVE ITEM FROM LIST
-    # TODO ADD QUERY MODULE
-    # TODO ARCHIVE ITEMS
+    # TODO ARCHIVE ITEM
 
 class TodoFilter():
     """ Filtering Todo Items """
 
     # Filter VALUES
-    # TYPE="TYPE"               # filter type, allowed: REGEX, DATE, VALUE
-    PROPERTY="PROPERTY"         # property name to be filtered (Any of the PROPERTY_... values)
+    # TYPE="TYPE"                    # filter type, allowed: REGEX, DATE, VALUE
+    PROPERTY="PROPERTY"              # property name to be filtered (Any of the PROPERTY_... values)
     PROPERTY_ORIGINAL="PROPERTY_ORIGINAL"  # property name to be filtered (Any of the PROPERTY_... values)
-    REGEX="REGEX"               # will use REGEX filter
-    DATE_FROM="DATE_FROM"       # begin of date range, is today if not supplied
-    DATE_TO="DATE_TO"           # end of date range, is today if not supplied
-    INCLUDE="INCLUDE"           # include search to pass, values: true (DEFAULT) or false  (then it's excluded)
-    VALUE="VALUE"               # will search for value to be filtered
+    INFO = "INFO"           # PROPERTY for optional Info string
+    REGEX="REGEX"                    # will use REGEX filter
+    DATE="DATE"                      # begin of date range, is today if not supplied
+    DATE_FROM="DATE_FROM"            # begin of date range, is today if not supplied
+    DATE_TO="DATE_TO"                # end of date range, is today if not supplied
+    INCLUDE="INCLUDE"                # include search to pass, values: true (DEFAULT) or false  (then it's excluded)
+    VALUE="VALUE"                    # will search for value to be filtered
+    TYPE="TYPE"                      # will search for value to be filtered
+    PATTERN="PATTERN"                # search pattern
+    REGEX_TODAY="TODAY([+-].\d+)?"   # regex for today pattern TODAY[+-]#
+    REGEX_DATE=r"20\d\d[01]\d[0-3]\d" # regex for day pattern 20YYMMDD
 
     # Keys for Dict Access
     FILTER="FILTER"
     FILTER_LIST="FILTER_LIST" # Single Filter Rules
     FILTER_SETS="FILTER_SETS" # FILTER SETS
 
-    VALID_FILTER_ROPERTIES = [PROPERTY,REGEX,INCLUDE,DATE_FROM,DATE_TO,VALUE]
+    VALID_FILTER_ROPERTIES = [PROPERTY,REGEX,INCLUDE,DATE_FROM,DATE_TO,VALUE,INFO,TYPE]
 
     def __init__(self,filter_config:dict,show_info:bool=False, property_list:list=None) -> None:
         """ Constructor gets filter settings from TodoConfig """
@@ -824,6 +864,35 @@ class TodoFilter():
         # parse all filters
         self._parse_config_dict(self._filter_config)
 
+    @staticmethod
+    def get_date(d):
+        """ get date from search pattern """
+        if isinstance(d,DateTime):
+            return d
+
+        if d is None:
+            return DateTime.now()
+
+        match=re.findall(TodoFilter.REGEX_TODAY,d,re.IGNORECASE)
+        dt=None
+        if match:
+            dt=DateTime.now()
+            try:
+                offset = int(match[0])
+            except ValueError:
+                offset = 0
+            dt=dt+TimeDelta(days=offset)
+        else:
+            d=d.replace("-","")
+            match=re.findall(TodoFilter.REGEX_DATE,d,re.IGNORECASE)
+            if match:
+                y,m,d=[int(v) for v in match[0]]
+                dt=DateTime(year=y,month=m,day=d)
+            else:
+                print(f"{d} is no Valid Date Pattern, check input")
+
+        return dt
+
     def _parse_config_dict(self,filter_config:dict):
         """ complement and validate filter list """
 
@@ -839,6 +908,8 @@ class TodoFilter():
 
         self._filter_dict = {}
         for filter_name , filter_properties in filter_list.items():
+
+            filter_properties[TodoFilter.TYPE]=None
             if self._show_info:
                 print(f"### Configuring Filter {filter_name}")
 
@@ -857,25 +928,35 @@ class TodoFilter():
 
             # CHECK FOR CORRECT PROPERTY  FIELDS IF LIST AVAILABLE
             if self._property_list:
-               property = filter_properties.get(TodoFilter.PROPERTY)
-               if not property in self._property_list:
-                   print(f"Filter: {filter_name}, PROPERTY with value {property} can not be validated, check")
-                   continue
+                prop = filter_properties.get(TodoFilter.PROPERTY)
+                if not prop in self._property_list:
+                    print(f"Filter: {filter_name}, PROPERTY with value {property} can not be validated, check")
+                    continue
 
             filter_properties[TodoFilter.INCLUDE] = filter_properties.get(TodoFilter.INCLUDE,True)
 
-            # set appropriate values for different filter type
+            # TODO set appropriate values for different filter type
             if filter_properties.get(TodoFilter.VALUE):
-                pass
+                filter_properties[TodoFilter.TYPE]=TodoFilter.VALUE
+                filter_properties[TodoFilter.PATTERN]=filter_properties.get(TodoFilter.VALUE)
             elif filter_properties.get(TodoFilter.REGEX):
-                pass
+                filter_properties[TodoFilter.TYPE]=TodoFilter.REGEX
+                filter_properties[TodoFilter.PATTERN]=filter_properties.get(TodoFilter.REGEX)
             elif filter_properties.get(TodoFilter.DATE_FROM) or filter_properties.get(TodoFilter.DATE_TO):
-                pass
+                filter_properties[TodoFilter.TYPE]=TodoFilter.DATE
+                date_from = TodoFilter.get_date(filter_properties.get(TodoFilter.DATE_FROM,"TODAY"))
+                date_to = TodoFilter.get_date(filter_properties.get(TodoFilter.DATE_TO,"TODAY"))
+                filter_properties[TodoFilter.PATTERN]=[date_from,date_to]
 
             self._filter_dict[filter_name] = filter_properties
 
+        self._filter_sets={}
+
+        # now add single filters as filter sets
+        for filter_name in self._filter_dict.keys():
+            self._filter_sets[filter_name] = [filter_name]
+
         if filter_sets:
-            self._filter_sets={}
             # cross check for correct filter sets
             valid_filters = self._filter_dict.keys()
             #self._filter_sets = self._filter_config.get(TodoFilter.FILTER_SETS)
@@ -884,12 +965,10 @@ class TodoFilter():
                 if self._show_info:
                     print(f"### Check Filter Set {filterset_name}")
                 exist = [v in valid_filters for v in filter_list]
-                if not (all(exist)):
+                if not all(exist):
                     print(f"### FILTERSET {filterset_name} contains invalid filter references and will be ignored please check")
                     continue
                 self._filter_sets[filterset_name]=filter_list
-
-        pass
 
     def get_filter_settings_dict(self):
         """ returns validated filter data """
@@ -901,6 +980,81 @@ class TodoFilter():
     def __repr__(self)->str:
         return pprint.pformat(self.get_filter_settings_dict(),indent=4)
 
-    # TODO ADD filters for regex
-    # TODO add date filter
-    # TODO Validate Attributes using config.yaml
+
+    def filter(self,todo_dict:dict,filter_set_name:str,search_term:str=None):
+        """ Filter Todo Dict. search variable can be used to
+           override search term from template
+        """
+
+        def filter_date(d,date_interval):
+            d_ts = TodoFilter.get_date(d).timestamp()
+            from_ts=date_interval[0].timestamp()
+            to_ts=date_interval[1].timestamp()
+            if d_ts >= from_ts and d_ts <= to_ts:
+                return True
+            else:
+                return False
+
+        filter_passed = []
+
+        # get filter
+        filter_sets=self._filter_sets.get(filter_set_name)
+        if not filter_sets:
+            print(f"Could not find filter set {filter_set_name}")
+            return
+
+        for filter_name in filter_sets:
+            filter_dict = self._filter_dict.get(filter_name)
+            if not filter_dict:
+                print(f"Could not find filter {filter_name}, filter set {filter_set_name}")
+                return
+
+            filter_type = filter_dict.get(TodoFilter.TYPE)
+            if not filter_type:
+                print(f"Could not find filter type for filter set {filter_set_name}")
+                return
+
+            todo_property = filter_dict.get(TodoFilter.PROPERTY)
+            if not todo_property:
+                print(f"Couldn't find Todo Property for filter set {filter_set_name}")
+                return
+
+            if search_term:
+                pattern = search_term
+            else:
+                pattern = filter_dict.get(TodoFilter.PATTERN)
+                if not pattern:
+                    print(f"Couldn't find Todo Search Pattern property for filter set {filter_set_name}")
+                    return
+
+            prop = Todo.PROPERTY_DICT.get(todo_property)
+            value = todo_dict.get(prop)
+
+            if not value:
+                print(f"Couldn't find Value for Property {todo_property} using filter set {filter_set_name}")
+                return
+
+            # do the test for the various options
+            passed = False
+            if filter_type == TodoFilter.VALUE:
+                if pattern in value:
+                    passed = True
+
+            elif filter_type == TodoFilter.REGEX:
+                match=re.findall(pattern,value,re.IGNORECASE)
+                if match:
+                    passed = True
+            elif filter_type == TodoFilter.DATE:
+                passed = filter_date(value,pattern)
+            else:
+                print(f"Invalid filter Type {filter_type} used in filter {filter_name}, check")
+                return
+
+            # now check for including / excluding criteria
+            if not filter_dict.get(TodoFilter.INCLUDE,True):
+                passed = not passed
+
+            filter_passed.append(passed)
+
+        filter_passed = all(filter_passed)
+        return filter_passed
