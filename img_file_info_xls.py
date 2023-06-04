@@ -274,16 +274,17 @@ def read_exif(f:str,exif_fields:str=ALL_EXIF_TAGS,software:str=SOFTWARE,
     im.close()
     exif_dict={}
 
-    for tag_id,exif_value in im_exif_dict.items():
-        exif_attribute=TAGS.get(tag_id)
-        if exif_attribute and exif_attribute in exif_fields:
-            exif_dict[exif_attribute]={"tag_id":tag_id,"value":exif_value}
+    if im_exif_dict:
+        for tag_id,exif_value in im_exif_dict.items():
+            exif_attribute=TAGS.get(tag_id)
+            if exif_attribute and exif_attribute in exif_fields:
+                exif_dict[exif_attribute]={"tag_id":tag_id,"value":exif_value}
 
     # exif_dict=dict([(TAGS.get(tag_id,str(tag_id)),
     #                 {"tag_id":tag_id,"value":exifdata.get(tag_id,None)}) for tag_id in list(exifdata.keys())])
 
-    if debug:
-        print(f"Metadata attributes: {exif_dict.keys()}")
+        if debug:
+            print(f"Metadata attributes: {exif_dict.keys()}")
 
     for exif_field in exif_fields:
         if not exif_dict.get(exif_field,None):
