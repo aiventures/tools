@@ -1,9 +1,8 @@
 """ sample program demoing todo.py """
 
 # from tools.todo import Todo
-from tools.todo import TodoConfig
-from tools.todo import TodoList
-from tools.todo import Todo
+from tools.todo_txt.todo import TodoList
+from tools.todo_txt.todo import Todo
 import tools.file_module as fm
 import os
 

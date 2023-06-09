@@ -28,11 +28,13 @@ class TodoConfig:
     ARCHIVE="ARCHIVE"
     BACKUP="BACKUP"
     FILE="FILE"
+    INFO="INFO"
     PATH="PATH"
     COLORS="COLORS"
     COLOR_DICT="COLOR_DICT"
+
     COLOR_MAP_DEFAULT="TODO_COLORS_DEFAULT"
-    COLOR_DEFAULT = "COLOR_DEFAULT"
+    COLOR_DEFAULT = "DEFAULT_COLOR"
     SETTINGS="SETTINGS"
     FILE_SETTINGS="FILE_SETTINGS"
     PROPERTIES="PROPERTIES"
@@ -71,6 +73,7 @@ class TodoConfig:
         self._add_hash = False # Add Hash Attribute to Todo
         self._filter_config = None # Filter Configuration
         self._properties = None # Filter Configuration
+        self._info = {} # additional text information
 
         if not os.path.isfile(f):
             print(f"Configuration {f}, is not a valid file")
@@ -144,7 +147,7 @@ class TodoConfig:
 
     def create_todo_color_map(self,color_dict:dict, color_map:str):
         """ create a color map """
-        # TODO create color map for items with prio
+
         color_lookup=color_dict.get(TodoConfig.COLOR_DICT)
         if not color_lookup:
             print("No Color LookUp Table found, check yaml.COLORS.COLOR_DICT segment")
@@ -166,6 +169,16 @@ class TodoConfig:
             if self._show_info:
                 print(f"    Todo Attribute ({todo_attribute}), ({color}) [{color_code}]")
             color_map_dict_out[todo_attribute] = color_code
+
+        # assign colors for not listed prios
+        color_prio_default=color_map_dict_out.get(Todo.PROPERTY_PRIORITY)
+        if not color_prio_default:
+            color_prio_default = color_default
+        for prio in range(ord("A"),ord("Z")+1):
+            prio_attribute=Todo.PRIO_PREFIX+chr(prio)
+            # check if prop exists in map, supply default color
+            if color_map_dict_out.get(prio_attribute) is None:
+                color_map_dict_out[prio_attribute]=color_prio_default
         return color_map_dict_out
 
     def read_config(self,f:str):
@@ -220,6 +233,9 @@ class TodoConfig:
             self._filter_config = config_dict.get(TodoConfig.FILTER)
             self._filter = TodoFilter(self._filter_config,self._show_info,self._properties)
 
+        if config_dict.get(TodoConfig.INFO):
+            self._info=config_dict.get(TodoConfig.INFO)
+
     def is_config_valid(self)->bool:
         """ checks if config is valid / data are present"""
         is_valid = True
@@ -260,10 +276,30 @@ class TodoConfig:
           },
           TodoConfig.COLORS: self.color_map,
           TodoConfig.PROPERTIES: self._properties,
-          TodoConfig.FILTER: self._filter.get_filter_settings_dict()
+          TodoConfig.FILTER: self._filter.get_filter_settings_dict(),
+          TodoConfig.INFO: self._info
         }
 
         return config_dict
+
+    def _get_info(self,info_key):
+        """ try to get a description if defined in yaml """
+        for info_area,info_area_dict in self._info.items():
+            for key,info_text in info_area_dict.items():
+                if key == info_key:
+                    out=f"{info_text} [{info_area}]"
+                    return out
+        return None
+
+    def print_color_map(self):
+        """ prints a color map """
+        print(f"\n### USING COLOR MAP: {self._color_map_name} ")
+        for k,col in self._color_map.items():
+            info=self._get_info(k)
+            s=k+" ["+col+"]"
+            if info:
+                s += f" ({info})"
+            print(f"    * {Todo.colorize(s,col)} ")
 
     def __repr__(self)->str:
         return pprint.pformat(self._config_dict(),indent=4)
@@ -282,6 +318,7 @@ class Todo:
     PROPERTY_COMPLETED = "COMPLETED TASKS"
     PROPERTY_CHANGED = "CHANGED"
     PROPERTY_PRIORITY = "PRIO"
+    PRIO_PREFIX = "PRIO_"
     PROPERTY_DATE_COMPLETED = "DATE_COMPLETED"
     PROPERTY_DATE_CREATED = "DATE_CREATED"
     PROPERTY_DESCRIPTION = "DESCRIPTION"
@@ -318,7 +355,7 @@ class Todo:
         "PROPERTY_ORIGINAL" : "ORIGINAL",
         "PROPERTY_NEW" : "NEW",
         "PROPERTY_INDEX" : "INDEX"
-    }    
+    }
 
     # PROPERTES TO BE USED AS OUTPUT FOR STRING
     TODO_STRING_PROPERTIES=[ PROPERTY_COMPLETE, PROPERTY_PRIORITY, PROPERTY_DATE_COMPLETED,
@@ -332,8 +369,6 @@ class Todo:
         """ calculates a hash string of transferred string """
         hash_object = hashlib.md5(s.encode())
         return hash_object.hexdigest()
-
-    # TODO add method to colorize todo tools_console > todo_txt.py
 
     # @staticmethod
     # def get_col_text(text,color):
@@ -378,24 +413,52 @@ class Todo:
         return todo_dict
 
     @staticmethod
+    def colorize(s:str, color:str)->str:
+        """ colorizes a string """
+        if color is not None:
+            return f"\x1b[{color}m{s}\x1b[0m"
+        else:
+            return s
+
+    @staticmethod
     def get_todo(todo_dict:dict,color_map:dict=None):
         """ get colored todo using a color map
            if no map is supplied an unformatted string will be returned
         """
 
-        def colorize(s:str, color:str)->str:
-            """ colorizes a string """
-            if color is not None:
-                return f"\x1b[{color}m{s}\x1b[0m"
-            else:
-                return s
+        if todo_dict is None: # empty lines
+            return
 
         s_out=[]
-        # TODO REFLECT CHANGED COLOR / needs to add project changed
-        # TODO COLOR TEXT Depending on Priority
+
         col_default=None
+        color_prio=None
+        color_description=None
+        color_completed=None
         if color_map:
             col_default=color_map.get(TodoConfig.COLOR_DEFAULT)
+            # Get Priority Colors if in Color Map
+            prio_default_color=color_map.get(Todo.PROPERTY_PRIORITY,col_default)
+            prio=todo_dict.get(Todo.PROPERTY_PRIORITY)
+            if prio:
+                color_prio = color_map.get(Todo.PRIO_PREFIX+prio,prio_default_color)
+                if color_prio != prio_default_color:
+                    color_description=color_prio
+                else:
+                    color_description=col_default
+            else:
+                color_prio=col_default
+                color_description=col_default
+            if todo_dict.get(Todo.PROPERTY_COMPLETE) is True:
+                color_description=color_map.get(Todo.PROPERTY_COMPLETE,col_default)
+                color_prio=color_map.get(Todo.PROPERTY_COMPLETE,col_default)
+                color_completed=color_map.get(Todo.PROPERTY_COMPLETE)
+                if not color_completed:
+                    color_completed=col_default
+                todo_s=Todo.get_todo(todo_dict)
+                # completed item return todo with complete color
+                return Todo.colorize(todo_s,color_completed)
+
         for key in Todo.TODO_STRING_PROPERTIES:
             if color_map:
                 color=color_map.get(key,col_default)
@@ -411,18 +474,20 @@ class Todo:
 
             # treat special cases
             if key == Todo.PROPERTY_PRIORITY:
-                s=colorize("("+value+")",color)
+                s=Todo.colorize("("+value+")",color_prio)
+            elif key == Todo.PROPERTY_DESCRIPTION:
+                s=Todo.colorize(value,color_description)
             elif key==Todo.PROPERTY_CHANGED:
                 # check if doing nothing is ok
                 continue
             elif key==Todo.PROPERTY_COMPLETE:
                 if value is True:
-                    s=colorize("x",color)
+                    s=Todo.colorize("x",color)
                 else:
                     continue
             # transform dates
             elif isinstance(value,DateTime):
-                s=colorize(value.strftime("%Y-%m-%d"),color)
+                s=Todo.colorize(value.strftime("%Y-%m-%d"),color)
             # transform properties
             elif key == Todo.PROPERTY_ATTRIBUTES:
                 s_prop_list=[]
@@ -432,7 +497,7 @@ class Todo:
                     # skip old hash value
                     if k_prop.upper() == Todo.PROPERTY_HASH.upper():
                         continue
-                    s_prop=colorize(k_prop,color)
+                    s_prop=Todo.colorize(k_prop,color)
                     s_prop_list.append(s_prop+":"+v_prop)
                 s=" ".join(s_prop_list)
             # handle collections
@@ -442,16 +507,16 @@ class Todo:
                 if key == Todo.PROPERTY_PROJECTS:
                     prefix="+"
                 for item in value:
-                    s=colorize(prefix+item,color)
+                    s=Todo.colorize(prefix+item,color)
                     s_list.append(s)
                 s=" ".join(s_list)
             elif key == Todo.PROPERTY_DATE_CHANGED:
                 # TODO ADD COLOR FOR CHANGED PROPERTY
-                s=colorize(Todo.ATTRIBUTE_DATE_CHANGED+":"+value,color)
+                s=Todo.colorize(Todo.ATTRIBUTE_DATE_CHANGED+":"+value,color)
             elif key == Todo.PROPERTY_HASH:
-                s=colorize("hash:"+value,color)
+                s=Todo.colorize("hash:"+value,color)
             else:
-                s=colorize(value,color)
+                s=Todo.colorize(value,color)
             if s:
                 s_out.append(s)
         return " ".join(s_out)
@@ -656,6 +721,9 @@ class Todo:
 class TodoList():
     """ Handling of Todo List including Filehandling """
 
+    CHANGED="CHANGED"
+    DELETED="DELETED"
+
     def __init__(self,f:str) -> None:
         """ constructor, requires link to config file """
         self._config = TodoConfig(f)
@@ -665,6 +733,13 @@ class TodoList():
         self._todo_dict = {}
         self._archive_dict = {}
         self._counter = 0
+        self._changed_todos = { TodoList.CHANGED:{},
+                                TodoList.DELETED:{}}
+
+    @property
+    def config(self):
+        """ fconfiguration """
+        return self._config
 
     def read_list(self,read_archive:bool=False):
         """ reads todo list from todo.txt file  """
@@ -815,13 +890,62 @@ class TodoList():
         todo_dict=self.get_todo(index,as_dict=True)
         if not todo_dict:
             return
+        if not hasattr(self._config,"_filter"):
+            print("NO CONFIGURATION FOUND FOR FILTER, CHECK YOUR CONFIG YAML")
+            return True
         todo_filter = self._config._filter
         is_filtered = todo_filter.filter(todo_dict,filter_set_name,search_term)
         return is_filtered
 
+    def get_task_dict(self,group_by:str,filter_set_name:str=None,search_term:str=None,color:bool=False):
+        """ returns copy of task list grouped by criteria in dict and output may be filtered filter
+        """
+        out_dict={}
+        # Todo.PROPERTY_COMPLETED
+        properties=list(Todo.PROPERTY_DICT.values())
+
+        if group_by and not group_by in properties:
+            print(f"Attribute {group_by} is not a valid group attribute, check")
+
+        for index,todo_item in self._todo_dict.items():
+
+            # filter item
+            if filter_set_name:
+                passed_filter=self.filter(index,filter_set_name,search_term)
+                if not passed_filter:
+                    continue
+
+            if group_by:
+                group_keys=todo_item.get(group_by)
+            else:
+                group_keys=todo_item.get(Todo.PROPERTY_INDEX)
+
+            if not group_keys:
+                continue
+            if isinstance(group_keys,dict):
+                att_list=[]
+                for att in group_keys.keys():
+                    att_list.append(att)
+            elif not isinstance(group_keys,list):
+                group_keys=[group_keys]
+
+            for group_key in group_keys:
+                grouped_todos = out_dict.get(group_key,[])
+                if not grouped_todos:
+                    out_dict[group_key]=grouped_todos
+                if color:
+                    todo=self.get_todo(index,is_colored=True)
+                else:
+                    todo=todo_item.get(Todo.PROPERTY_NEW)
+                grouped_todos.append("["+str(index).zfill(2)+"] "+todo)
+
+        return out_dict
+
     # TODO ADD METHOD TO ADD ITEM TO LIST
     # TODO ADD METHOD TO REMOVE ITEM FROM LIST
+    # TODO CHANGE TOdo set completed
     # TODO ARCHIVE ITEM
+    # TODO COLOR PRIORITY LABEL
 
 class TodoFilter():
     """ Filtering Todo Items """
@@ -1030,15 +1154,19 @@ class TodoFilter():
             prop = Todo.PROPERTY_DICT.get(todo_property)
             value = todo_dict.get(prop)
 
-            if not value:
+            if value is None:
                 print(f"Couldn't find Value for Property {todo_property} using filter set {filter_set_name}")
                 return
 
             # do the test for the various options
             passed = False
             if filter_type == TodoFilter.VALUE:
-                if pattern in value:
-                    passed = True
+                if isinstance(value,str):
+                    if pattern in value:
+                        passed = True
+                elif isinstance(value,bool):
+                    if pattern == value:
+                        passed = True
 
             elif filter_type == TodoFilter.REGEX:
                 match=re.findall(pattern,value,re.IGNORECASE)
