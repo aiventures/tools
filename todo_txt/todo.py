@@ -18,11 +18,7 @@ from datetime import timedelta as TimeDelta
 from pandas import DataFrame
 from pandas.api.types import is_datetime64_any_dtype
 from tools import file_module as fm
-# TODO switch to logging
 import logging
-
-# d=DateTime.now().strftime("%Y%m%d_%H%M%S")
-# print(d)
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +93,11 @@ class TodoConfig:
     def filter(self):
         """ filter object """
         return self._filter
+
+    @property
+    def create_backup(self):
+        """ flag to create backup """
+        return self._create_backup
 
     @property
     def todo_backup(self):
@@ -411,20 +412,23 @@ class Todo:
 
         new_todo_s=Todo.get_todo(todo_dict)
         original_todo_s = todo_dict.get(Todo.PROPERTY_ORIGINAL,"")
+        todo_dict[Todo.PROPERTY_NEW]=new_todo_s
 
         if new_todo_s != original_todo_s:
             todo_dict[Todo.PROPERTY_CHANGED]=True
-            todo_dict[Todo.PROPERTY_NEW]=new_todo_s
             if add_date_change:
                 todo_dict[Todo.PROPERTY_DATE_CHANGED]=date_s
             # recalculate hash value
             todo_s=Todo.get_todo(todo_dict)
             todo_dict[Todo.PROPERTY_HASH]=Todo.get_todo_hash(todo_s)
-            # update colored todo version
-            if color_map:
-                todo_colorized=Todo.get_todo(todo_dict,color_map)
-                if todo_colorized:
-                    todo_dict[Todo.PROPERTY_COLORIZED]=todo_colorized
+
+        # update colored todo version
+        if color_map:
+            todo_colorized=Todo.get_todo(todo_dict,color_map)
+            if todo_colorized:
+                todo_dict[Todo.PROPERTY_COLORIZED]=todo_colorized
+            else:
+                todo_dict[Todo.PROPERTY_COLORIZED] = new_todo_s
 
         return todo_dict
 
@@ -512,6 +516,9 @@ class Todo:
                         v_prop=v_prop.strftime("%Y-%m-%d")
                     # skip old hash value
                     if k_prop.upper() == Todo.PROPERTY_HASH.upper():
+                        continue                    
+                    # skip old CHANGED DATE VALUE will be treated below 
+                    if k_prop.lower() == Todo.ATTRIBUTE_DATE_CHANGED:
                         continue
                     s_prop=Todo.colorize(k_prop,color)
                     s_prop_list.append(s_prop+":"+v_prop)
@@ -736,6 +743,7 @@ class TodoList():
     DELETED="DELETED"
     ADDED="ADDED"
     ARCHIVED="ARCHIVED"
+
     LIST_CHANGES=[ADDED,CHANGED,DELETED,ARCHIVED]
 
     def __init__(self,f:str) -> None:
@@ -743,7 +751,7 @@ class TodoList():
         self._config = TodoConfig(f)
         # check for correct configuration
         self._config.is_config_valid()
-        self._todo_dict = {}
+        self._todo_dicts = {}
         self._archive_dict = {}
         self._counter = 0
         self._changed_todos = { TodoList.CHANGED:{},
@@ -763,10 +771,10 @@ class TodoList():
         f_todo=self._config.file_todo
         todo_list = fm.read_txt_file(f_todo)
 
-        self._todo_dict = Todo.get_dict_from_todo(todo_list,origin=TodoConfig.TODO)
-        self._counter = len(self._todo_dict )
+        self._todo_dicts = Todo.get_dict_from_todo(todo_list,origin=TodoConfig.TODO)
+        self._counter = len(self._todo_dicts )
 
-        for index, todo_dict_item in self._todo_dict.items():
+        for index, todo_dict_item in self._todo_dicts.items():
             todo_dict_item[Todo.PROPERTY_NEW]=self.get_todo(index)
             todo_dict_item[Todo.PROPERTY_COLORIZED]=self.get_todo(index,is_colored=True)
 
@@ -798,9 +806,9 @@ class TodoList():
         shutil.copy(src=f_todo,dst=f_todo_backup)
         shutil.copy(src=f_todo_archive,dst=f_todo_archive_backup)
 
-    def amend(self,index:int):
+    def _amend(self,index:int):
         """ amend data with default data if missing """
-        todo_dict = self._todo_dict.get(index)
+        todo_dict = self._todo_dicts.get(index)
         default_prio=self._config.default_prio
         add_date_change=self._config.date_changed
         if not todo_dict:
@@ -809,23 +817,22 @@ class TodoList():
         todo_dict_amend = Todo.amend(todo_dict,default_prio,add_date_change,self.config.color_map)
         if todo_dict_amend.get(Todo.PROPERTY_CHANGED) is True:
             self._changed_todos[TodoList.CHANGED][index]=todo_dict
+            _ = self._update_change_log()
         return todo_dict_amend
 
     def _amend_todo_dict(self,todo_dict:dict):
         """ amends the transferred dict by standard settings """
         default_prio=self._config.default_prio
         add_date_change=self._config.date_changed
-        # TODO RECOLOR
         return Todo.amend(todo_dict,default_prio,add_date_change)
 
-    def add_todo(self,todo_str:str):
+    def add(self,todo_str:str):
         """ adds a todo item to the todo list """
         counter=self._counter+1
         todo_dict = Todo.get_dict_from_todo(todo_list=[todo_str],start_index=counter)[counter]
-        self._todo_dict[counter]=self._amend_todo_dict(todo_dict)
+        self._todo_dicts[counter]=self._amend_todo_dict(todo_dict)
         self._counter=counter
         self._changed_todos[TodoList.ADDED][counter]=todo_dict
-
 
     def _get_amended_todo_str(self,todo_str,colorize:bool=False):
         """ returns the amended version of a todo string """
@@ -862,94 +869,162 @@ class TodoList():
         colorize = self.config.colorize
         new_todo_colored=self._get_amended_todo_str(new_todo_s,colorize)
         print(f"ADDING LINE ({self._counter+1})\n{new_todo_colored}")
-        self.add_todo(new_todo_s)
+        self.add(new_todo_s)
 
-    def save(self,output:bool=False):
+
+    def _update_change_log(self):
+        """ get rid of duplicates in changed todo list, returns list of keys """
+        arch_keys=list(self._changed_todos.get(TodoList.ARCHIVED,{}).keys())
+        del_keys=list(self._changed_todos.get(TodoList.DELETED,{}).keys())
+        add_keys=list(self._changed_todos.get(TodoList.ADDED,{}).keys())
+        changed_keys=list(set([*arch_keys,*del_keys,*add_keys]))
+        meta_keys=list(self._changed_todos.get(TodoList.CHANGED,{}).keys())
+
+
+        for changed_key in changed_keys:
+            if changed_key in meta_keys:
+                _ = self._changed_todos.get(TodoList.CHANGED).pop(changed_key)
+
+        key_dict={ TodoList.CHANGED:list(self._changed_todos.get(TodoList.CHANGED,{}).keys()),
+                   TodoList.DELETED:del_keys,
+                   TodoList.ADDED:add_keys,
+                   TodoList.ARCHIVED:arch_keys
+        }
+
+        return key_dict
+
+    def show(self,filter_set_name:str=None,search_term:str=None,display_todo:bool=True,
+             display_archive:bool=None,display_deleted:bool=False):
+        """ display current todo list and changed items"""
+
+        print(f"\n####   TODO LIST, Filter: {filter_set_name}, search term {search_term}")
+        todo_out=[]
+        todo_out_dict={}
+        archived_out=[]
+        change_log = self._update_change_log()
+
+        if filter_set_name and hasattr(self._config,"_filter"):
+            logger.warning("Can not use filter %s, as filters were nit initializedm check configuration",filter_set_name)
+            todo_filter = self.config._filter
+        else:
+            todo_filter = None
+
+        if display_todo:
+            for index in sorted(list(self._todo_dicts.keys())):
+                todo_dict = self._todo_dicts[index]
+                if todo_filter:
+                    passed = todo_filter.filter(todo_dict,filter_set_name,search_term)
+                    if not passed:
+                        continue
+
+                if index in change_log[TodoList.CHANGED]:
+                    s = "(CHG) "
+                elif index in change_log[TodoList.ADDED]:
+                    s = "(ADD) "
+                else:
+                    s = "      "
+                todo_s = todo_dict.get(Todo.PROPERTY_COLORIZED)
+                s+="["+str(index).zfill(3)+"] "+todo_s
+                todo_out_dict[index]=s
+
+        if display_deleted:
+            for index in sorted(list(change_log[TodoList.DELETED])):
+                todo_dict = self._changed_todos[TodoList.DELETED][index]
+                if todo_filter:
+                    passed = todo_filter.filter(todo_dict,filter_set_name,search_term)
+                    if not passed:
+                        continue
+                s = "(DEL) "
+                todo_s = todo_dict.get(Todo.PROPERTY_NEW)
+                todo_s = Todo.colorize(todo_s,self.config.color_map[Todo.PROPERTY_COMPLETE])
+                s+="["+str(index).zfill(3)+"] "+todo_s
+                todo_out_dict[index]=s
+        
+        if todo_out_dict:
+            todo_out = [todo_out_dict[index] for index in sorted(list(todo_out_dict.keys()))]
+
+        if display_archive:
+            for index in sorted(list(change_log[TodoList.ARCHIVED])):
+                todo_dict = self._changed_todos[TodoList.ARCHIVED][index]
+                if todo_filter:
+                    passed = todo_filter.filter(todo_dict,filter_set_name,search_term)
+                    if not passed:
+                        continue
+                s = "(ARC) "
+                todo_s = todo_dict.get(Todo.PROPERTY_COLORIZED)
+                s+="["+str(index).zfill(3)+"] "+todo_s
+                archived_out.append(s)
+
+            for index in sorted(list(self._archive_dict.keys())):
+                todo_dict = self._archive_dict[index]
+                if todo_filter:
+                    passed = todo_filter.filter(todo_dict,filter_set_name,search_term)
+                    if not passed:
+                        continue
+                s = "      "
+                todo_s = todo_dict.get(Todo.PROPERTY_COLORIZED)
+                s+="["+str(index).zfill(3)+"] "+todo_s
+                archived_out.append(s)
+
+        if todo_out:
+            print("\n####  TODO LIST CHANGES")
+            _ = [print(todo) for todo in todo_out]
+
+        if archived_out:
+            print("\n####  ARCHIVE CHANGES")            
+            _ = [print(todo) for todo in archived_out]            
+
+
+    def save(self,show:bool=False):
         """ save all changes (also on console)"""
 
-        def _clean_change_log():
-            """ get rid of duplicates in changed todo list"""
-            arch_keys=list(self._changed_todos.get(TodoList.ARCHIVED,{}).keys())
-            del_keys=list(self._changed_todos.get(TodoList.DELETED,{}).keys())
-            add_keys=list(self._changed_todos.get(TodoList.ADDED,{}).keys())
-            changed_keys=list(set([*arch_keys,*del_keys,*add_keys]))
-            meta_keys=self._changed_todos.get(TodoList.CHANGED,{}).keys()
+        _ = self._update_change_log()
 
-            for changed_key in changed_keys:
-                if changed_key in meta_keys:
-                    _ = self._changed_todos.get(TodoList.CHANGED).pop(changed_key)
-
-        _clean_change_log()
-
-        color=None
         archive_list=[]
         todo_list=[]
 
-        if output:
-            print("\n####   SAVE CHANGES (TODO LIST)")
-            if self.config.colorize:
-                color=self.config.color_map.get(Todo.PROPERTY_COMPLETE)
-
-
-        for index in sorted(list(self._todo_dict.keys())):
+        for index in sorted(list(self._todo_dicts.keys())):
             todo_s=self.get_todo(index)
-            todo_out = todo_s
-            if output and self.config.colorize:
-                todo_out=self.get_todo(index,is_colored=self.config.colorize)
-                todo_list.append(todo_s)
-                if self._todo_dict[index].get(Todo.PROPERTY_CHANGED,False) is True:
-                    chg="(CHG) "
-                else:
-                    chg="      "
-                print(f"{chg} [{str(index).zfill(3)}] {todo_out}")
+            todo_list.append(todo_s)
 
         # update archive if items were archived
         new_archive_item_dict = self._changed_todos.get(TodoList.ARCHIVED)
         if new_archive_item_dict:
 
-            archive_output=[]
-            idx=1
-
             for index in sorted(list(new_archive_item_dict.keys())):
                 arch_todo = new_archive_item_dict[index][Todo.PROPERTY_NEW]
                 archive_list.append(arch_todo)
-                if output:
-                    out_s = f"(ARC)  [{str(index).zfill(3)}] {Todo.colorize(arch_todo,color)}"
-                    archive_output.append(out_s)
-                    idx += 1
 
             for index in sorted(list(self._archive_dict.keys())):
                 arch_todo = self._archive_dict[index][Todo.PROPERTY_NEW]
                 archive_list.append(arch_todo)
-                if output:
-                    out_s = f"       [{str(idx).zfill(3)}] {Todo.colorize(arch_todo,color)}"
-                    archive_output.append(out_s)
-                    idx += 1
 
-            if output:
-                print("\n####   SAVE CHANGES (TODO ARCHIVE)")
-                _ = [print(arch_todo) for arch_todo in archive_output]
+        if show:
+            self.show(display_deleted=True,display_archive=True)                
 
-        if output:
-            deleted_item_dict = self._changed_todos.get(TodoList.DELETED)
-            if deleted_item_dict:
-                print("\n####   DELETIONS")
-                deletion_list=[]
-                for index in sorted(list(deleted_item_dict.keys())):
-                    del_todo = deleted_item_dict[index][Todo.PROPERTY_NEW]
-                    out_s = f"(DEL)  [{str(index).zfill(3)}] {Todo.colorize(del_todo,color)}"
-                    deletion_list.append(out_s)
-                _ = [print(del_todo) for del_todo in deletion_list]
+        config = self.config
+        d_prefix=DateTime.now().strftime("%Y%m%d_%H%M%S")+"_"
+        f_todo=config.file_todo
+        f_archive=config.file_archive
 
-            changes_s="\n####   CHANGES: "
-            for change in TodoList.LIST_CHANGES:
-                if self._changed_todos.get(change):
-                    changes_s += change+":"+str(list(self._changed_todos.get(change).keys()))+"; "
-            print(changes_s)
+        if self.config.create_backup:
+            path_backup = config._path_backup
+            f_backup_archive_name = os.path.join(path_backup,d_prefix+config.archive_backup)
+            f_backup_todo_name = os.path.join(path_backup,d_prefix+config.todo_backup)        
+            logger.info("Create backup file %s of Todo File",f_backup_todo_name)
+            shutil.copy(f_todo,f_backup_todo_name)
+            logger.info("Create backup file %s of Archive File",f_backup_archive_name)
+            shutil.copy(f_archive,f_backup_archive_name)
+
+        if todo_list:
+            fm.save_txt_file(f_todo,"\n".join(todo_list))
         
+        if archive_list:
+            fm.save_txt_file(f_archive,"\n".join(archive_list))            
+
     def complete(self,index:int):
         """ completes a todo """
-        todo_dict = self._todo_dict.get(index)
+        todo_dict = self._todo_dicts.get(index)
         todo_dict[Todo.PROPERTY_COMPLETE]=True
         Todo.amend(todo_dict,color_map=self.config.color_map)
 
@@ -957,7 +1032,7 @@ class TodoList():
         """ changes todo using dialog / displays previous todo """
 
         colorize = self.config.colorize
-        old_todo_s=self._todo_dict[index].get(Todo.PROPERTY_ORIGINAL)
+        old_todo_s=self._todo_dicts[index].get(Todo.PROPERTY_ORIGINAL)
         if not old_todo_s:
             logger.warning("Couldn't access ols todo string for todo %s",index)
         old_todo_colored=self._get_amended_todo_str(old_todo_s,colorize)
@@ -978,18 +1053,18 @@ class TodoList():
         todo_dict = self._amend_todo_dict(todo_dict)
 
         try:
-            todo_dict_old = self._todo_dict.pop(index)
+            todo_dict_old = self._todo_dicts.pop(index)
             self._changed_todos[TodoList.CHANGED][index]=todo_dict_old
         except KeyError as e:
             logger.warning("Index %s, not found %s",index,e.with_traceback)
             return
-        self._todo_dict[index]=todo_dict
+        self._todo_dicts[index]=todo_dict
         return todo_dict
 
     def delete(self,index:int):
         """ delete the given todo item, returns deleted item """
         try:
-            todo_dict = self._todo_dict.pop(index)
+            todo_dict = self._todo_dicts.pop(index)
             self._changed_todos[TodoList.DELETED][index]=todo_dict
             return todo_dict
         except KeyError as e:
@@ -1001,36 +1076,27 @@ class TodoList():
         """
 
         # todo_dict = self._todo_dict.get(index,{})
-        todo_dict = self.amend(index)
+        todo_dict = self._amend(index)
         if as_dict:
             return todo_dict
         elif as_json:
-            return pprint.pformat(todo_dict,indent=4)        
-        else: 
+            return pprint.pformat(todo_dict,indent=4)
+        else:
             if is_colored:
                 return todo_dict.get(Todo.PROPERTY_COLORIZED)
             else:
                 return todo_dict.get(Todo.PROPERTY_NEW)
 
-        # if as_dict:
-        #     return todo_dict
-        # elif as_json:
-        #     return pprint.pformat(todo_dict,indent=4)
-        # else:
-        #     color_map=None
-        #     if is_colored:
-        #         color_map=self._config.color_map
-        #     return Todo.get_todo(todo_dict,color_map)
 
     def archive(self):
         """ moves completed items to archive """
         delete_index=[]
-        for index,todo_dict in self._todo_dict.items():
+        for index,todo_dict in self._todo_dicts.items():
             if todo_dict.get(Todo.PROPERTY_COMPLETE) is True:
                 delete_index.append(index)
                 self._changed_todos[TodoList.ARCHIVED][index]=todo_dict.copy()
         for index in delete_index:
-            _ = self._todo_dict.pop(index)
+            _ = self._todo_dicts.pop(index)
             # self.delete_todo(index)
 
 
@@ -1041,7 +1107,7 @@ class TodoList():
     def get_df(self)->DataFrame:
         """ returns todo list as data frame """
         # TODO fix warning
-        df = DataFrame.from_dict(self._todo_dict,orient="index")
+        df = DataFrame.from_dict(self._todo_dicts,orient="index")
         return df
 
     def get_stats(self,as_json=False):
@@ -1133,7 +1199,7 @@ class TodoList():
         if group_by and not group_by in properties:
             print(f"Attribute {group_by} is not a valid group attribute, check")
 
-        for index,todo_item in self._todo_dict.items():
+        for index,todo_item in self._todo_dicts.items():
 
             # filter item
             if filter_set_name:
