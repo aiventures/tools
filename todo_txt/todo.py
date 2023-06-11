@@ -4,9 +4,11 @@
         will transform lines of strings in todo format into json and vice versa
 """
 
+# TODO feature sort todo lists
+# TODO Add Logs
+
 import pprint
 import re
-import traceback
 import hashlib
 from pathlib import Path
 import os
@@ -16,9 +18,13 @@ from datetime import timedelta as TimeDelta
 from pandas import DataFrame
 from pandas.api.types import is_datetime64_any_dtype
 from tools import file_module as fm
+# TODO switch to logging
+import logging
 
 # d=DateTime.now().strftime("%Y%m%d_%H%M%S")
 # print(d)
+
+logger = logging.getLogger(__name__)
 
 class TodoConfig:
     """ Todo.Txt Config Class """
@@ -42,9 +48,10 @@ class TodoConfig:
     SETTINGS_COLOR_MAP="COLOR_MAP"
     SETTINGS_ADD_CHANGE_DATE="DATE_CHANGED"
     SETTINGS_CREATE_BACKUP="CREATE_BACKUP"
-    SETTINGS_TODO="SETTINGS_TODO"
+    SETTINGS_TODO="SETTINGS"
     SETTINGS_DEFAULT_PRIO="DEFAULT_PRIO"
     SETTINGS_ADD_HASH="ADD_HASH"
+    SETTINGS_COLORIZE="COLORIZE"
 
     @staticmethod
     def get_filepath(p:str,f:str):
@@ -54,7 +61,7 @@ class TodoConfig:
             joinpath = os.path.join(p,f)
         joinpath = Path(joinpath).absolute()
         if not joinpath.is_file():
-            print(f"{joinpath} is not a valid file, check settings")
+            logger.warning("%s is not a valid file, check settings",joinpath)
             return None
         return str(joinpath)
 
@@ -66,7 +73,8 @@ class TodoConfig:
         self._archive_backup = None # base file name for todo archive backup
         self._path_backup = None # path to backup files
         self._color_map = None # mapping task segment to color
-        self._show_info = False # show verbose info should be replaced by log
+        self._colorize = False # colorize output
+        # self._show_info = False # show verbose info should be replaced by log
         self._date_changed = False # flag add date of changed when task was changed
         self._create_backup = False # Flag if backup needs to be created
         self._default_prio = "B" # Default Prio
@@ -76,9 +84,14 @@ class TodoConfig:
         self._info = {} # additional text information
 
         if not os.path.isfile(f):
-            print(f"Configuration {f}, is not a valid file")
+            logger.error("Configuration %s, is not a valid file",f)
             return
         self.read_config(f)
+
+    @property
+    def colorize(self):
+        """ colorize output """
+        return self._colorize
 
     @property
     def filter(self):
@@ -150,24 +163,22 @@ class TodoConfig:
 
         color_lookup=color_dict.get(TodoConfig.COLOR_DICT)
         if not color_lookup:
-            print("No Color LookUp Table found, check yaml.COLORS.COLOR_DICT segment")
+            logger.warning("No Color LookUp Table found, check yaml.COLORS.COLOR_DICT segment")
             return {}
         color_map_dict=color_dict.get(color_map)
         if not color_map_dict:
-            print(f"No Color Table named {color_map} found, check yaml.COLORS.TODO_COLORS_(name) segment")
+            logger.warning("No Color Table named %s found, check yaml.COLORS.TODO_COLORS_(name) segment",color_map)
             # use default
             color_map_dict=color_dict.get(TodoConfig.COLOR_MAP_DEFAULT)
         if not color_map_dict:
-            print("No Color Map found, check yaml.COLORS.TODO_COLORS_(name) segment")
+            logger.warning("No Color Map found, check yaml.COLORS.TODO_COLORS_(name) segment")
             return {}
-        if self._show_info:
-            print(f"### USING TODO COLOR MAP {color_map}")
+        logger.info("### USING TODO COLOR MAP %s",color_map)
         color_map_dict_out={}
         color_default=color_lookup["COLOR_DEFAULT"]
         for todo_attribute, color in color_map_dict.items():
             color_code = color_lookup.get(color,color_default)
-            if self._show_info:
-                print(f"    Todo Attribute ({todo_attribute}), ({color}) [{color_code}]")
+            logger.debug("    Todo Attribute (%s), (%s) [%s]",todo_attribute,color,color_code)
             color_map_dict_out[todo_attribute] = color_code
 
         # assign colors for not listed prios
@@ -192,15 +203,12 @@ class TodoConfig:
 
         if config_dict.get(TodoConfig.SETTINGS):
             settings_dict = config_dict.get(TodoConfig.SETTINGS)
-            self._show_info = settings_dict.get(TodoConfig.SETTINGS_SHOW_INFO,False)
             self._color_map_name=settings_dict.get(TodoConfig.SETTINGS_COLOR_MAP,TodoConfig.COLOR_MAP_DEFAULT)
+            self._colorize = settings_dict.get(TodoConfig.SETTINGS_COLORIZE,False)  # Colorize Output
             self._date_changed = settings_dict.get(TodoConfig.SETTINGS_ADD_CHANGE_DATE,False)
+            self._add_hash = settings_dict.get(TodoConfig.SETTINGS_ADD_HASH,False) # Add Hash Attribute to Todo
+            self._default_prio = settings_dict.get(TodoConfig.SETTINGS_DEFAULT_PRIO,"B") # Default Prio
             self._create_backup = settings_dict.get(TodoConfig.SETTINGS_CREATE_BACKUP,False)
-
-        if config_dict.get(TodoConfig.SETTINGS_TODO):
-            settings_todo_dict = config_dict.get(TodoConfig.SETTINGS_TODO)
-            self._default_prio = settings_todo_dict.get(TodoConfig.SETTINGS_DEFAULT_PRIO,"B") # Default Prio
-            self._add_hash = settings_todo_dict.get(TodoConfig.SETTINGS_ADD_HASH,False) # Add Hash Attribute to Todo
 
         if config_dict.get(TodoConfig.TODO):
             c=config_dict.get(TodoConfig.TODO)
@@ -218,20 +226,22 @@ class TodoConfig:
             if os.path.isdir(p):
                 self.path_backup = str(Path(p).absolute())
             else:
-                print(f"{p} is not a valid path, check settings")
+                logger.error("%s is not a valid path, check settings",p)
             self._todo_backup = c.get(TodoConfig.FILE,"todo_backup.bak")
             self._archive_backup = c.get(TodoConfig.ARCHIVE,"archive_backup.bak")
 
         if config_dict.get(TodoConfig.COLORS):
             color_dict = config_dict.get(TodoConfig.COLORS)
             self._color_map=self.create_todo_color_map(color_dict,self._color_map_name)
+            if not self._color_map: # do not colorize if there is no map
+                self._colorize = False
 
         if config_dict.get(TodoConfig.PROPERTIES):
             self._properties = config_dict.get(TodoConfig.PROPERTIES)
 
         if config_dict.get(TodoConfig.FILTER):
             self._filter_config = config_dict.get(TodoConfig.FILTER)
-            self._filter = TodoFilter(self._filter_config,self._show_info,self._properties)
+            self._filter = TodoFilter(self._filter_config,self._properties)
 
         if config_dict.get(TodoConfig.INFO):
             self._info=config_dict.get(TodoConfig.INFO)
@@ -240,13 +250,13 @@ class TodoConfig:
         """ checks if config is valid / data are present"""
         is_valid = True
         if not self.file_todo:
-            print("INVALID PATH TO TODO.TXT, check configuration")
+            logger.error("INVALID PATH TO TODO.TXT, check configuration")
             is_valid = False
         if not self.file_archive:
-            print("INVALID PATH TO TODO.TXT ARCHIVE FILE, check configuration")
+            logger.error("INVALID PATH TO TODO.TXT ARCHIVE FILE, check configuration")
             is_valid = False
         if not self.path_backup:
-            print("INVALID PATH TO BACKUP PATH, check configuration")
+            logger.error("INVALID PATH TO BACKUP PATH, check configuration")
             is_valid = False
         return is_valid
 
@@ -265,7 +275,6 @@ class TodoConfig:
               TodoConfig.PATH:self.path_backup
             }},
           TodoConfig.SETTINGS: {
-            TodoConfig.SETTINGS_SHOW_INFO:self._show_info,
             TodoConfig.SETTINGS_COLOR_MAP:self._color_map_name,
             TodoConfig.SETTINGS_ADD_CHANGE_DATE:self.date_changed,
             TodoConfig.SETTINGS_CREATE_BACKUP:self._create_backup
@@ -331,6 +340,7 @@ class Todo:
     PROPERTY_ORIGIN = "ORIGIN"
     PROPERTY_ORIGINAL = "ORIGINAL"
     PROPERTY_NEW = "NEW"
+    PROPERTY_COLORIZED = "COLORIZED"
     PROPERTY_INDEX = "INDEX"
 
     PROPERTY_DICT = {
@@ -376,7 +386,7 @@ class Todo:
     #     return f'\x1b[{color}m{text}\x1b[0m'
 
     @staticmethod
-    def amend(todo_dict:dict,default_prio:str="B",add_date_change:bool=True,show_info:bool=False)->dict:
+    def amend(todo_dict:dict,default_prio:str="B",add_date_change:bool=True,color_map:dict=None)->dict:
         """ adds default data if not present """
         date_s=DateTime.now().strftime("%Y-%m-%d")
 
@@ -404,11 +414,17 @@ class Todo:
 
         if new_todo_s != original_todo_s:
             todo_dict[Todo.PROPERTY_CHANGED]=True
+            todo_dict[Todo.PROPERTY_NEW]=new_todo_s
             if add_date_change:
                 todo_dict[Todo.PROPERTY_DATE_CHANGED]=date_s
             # recalculate hash value
             todo_s=Todo.get_todo(todo_dict)
-            todo_dict[Todo.PROPERTY_HASH]=Todo.get_todo_hash(todo_s,show_info=show_info)
+            todo_dict[Todo.PROPERTY_HASH]=Todo.get_todo_hash(todo_s)
+            # update colored todo version
+            if color_map:
+                todo_colorized=Todo.get_todo(todo_dict,color_map)
+                if todo_colorized:
+                    todo_dict[Todo.PROPERTY_COLORIZED]=todo_colorized
 
         return todo_dict
 
@@ -522,11 +538,11 @@ class Todo:
         return " ".join(s_out)
 
     @staticmethod
-    def get_dict_from_todo(todo_list:list, show_info:bool=False, origin:str=None,start_index:int=1):
+    def get_dict_from_todo(todo_list:list, origin:str=None,start_index:int=1):
         """ transforms list of todo strings (in array) into dictionary
             origin :  origin of data (filename)
         """
-        pp = pprint.PrettyPrinter(indent=4)
+
         date_pattern = r"^\d{4}-\d{1,2}-\d{1,2}"
         attribute_pattern = "([^:]+):([^:]+)" # alphanumeric separated by colon
         attribute_pattern_quote="([^:]+):([\"\'].+[\"\'])" # attributes with quotes can be used for links
@@ -534,8 +550,7 @@ class Todo:
 
         todo_list_dict = {}
 
-        if show_info:
-            print("\n--- get_dict_from_todo ---")
+        logger.debug("\n--- get_dict_from_todo ---")
 
         for todo in todo_list:
             if not isinstance(todo, str):
@@ -543,7 +558,7 @@ class Todo:
 
             todo_dict = {}
             # hash value (calculated without hash attribute)
-            todo_hash = Todo.get_todo_hash(todo,show_info)
+            todo_hash = Todo.get_todo_hash(todo)
 
             # check for patterns complete
             todo_line=todo
@@ -578,8 +593,8 @@ class Todo:
 
                         dt = DateTime.strptime(date_regex.group(), '%Y-%m-%d')
                         dates.append(dt)
-                    except ValueError:
-                        print(traceback.format_exc())
+                    except ValueError as e:
+                        logger.error("Couldn't convert DateTime: %s",e)
                     continue
 
                 # check for projects and contexts
@@ -644,15 +659,14 @@ class Todo:
             todo_list_dict[index] = todo_dict
 
             index += 1
-            if show_info:
-                print(f"\n --- Todo Dictionary, entry {todo_hash} ---")
-                print(f"     [{todo}]")
-                pp.pprint(todo_dict)
+            logger.debug("\n --- Todo Dictionary, entry %s ---",todo_hash)
+            logger.debug("     [%s]",todo)
+            logger.debug(pprint.pformat(todo_dict,indent=4,compact=True,width=40))
 
         return todo_list_dict
 
     @staticmethod
-    def get_todo_hash(todo_s:str, show_info: bool = False):
+    def get_todo_hash(todo_s:str):
         """ Calculates Hash from Todo String (dropping spaces) """
         # find and drop any hash property
         REGEX_HASH=f"( {Todo.ATTRIBUTE_HASH}:\\w+)"
@@ -662,17 +676,14 @@ class Todo:
         hash_s=todo_s.strip()
         hash_s=hash_s.replace(" ","")
         hash_value=Todo.get_hash(hash_s)
-        if show_info:
-            print(f"String [{hash_s}], hash value ({hash_value})")
+        logger.debug("String [%s], hash value (%s)",hash_s,hash_value)
         return hash_value
 
     @staticmethod
-    def get_todo_from_dict(todo_list_dict: dict, show_info: bool = False, calc_hash:bool=True):
+    def get_todo_from_dict(todo_list_dict: dict, calc_hash:bool=True):
         """ transforms todo.txt dictionary back into lines of todo.txt strings """
-        pp = pprint.PrettyPrinter(indent=4)
         todo_list = []
-        if show_info:
-            print("\n--- get_todo_from_dict ---")
+        logger.debug("\n--- get_todo_from_dict ---")
 
         for k, v in todo_list_dict.items():
             if v is None:
@@ -705,13 +716,13 @@ class Todo:
             todo_line = " ".join(todo_s)
 
             if calc_hash:
-                hash_value=Todo.get_todo_hash(todo_line,show_info=show_info)
+                hash_value=Todo.get_todo_hash(todo_line)
                 todo_line += " "+f"{Todo.ATTRIBUTE_HASH}:"+hash_value
 
-            if show_info:
-                print(f"\n--- dictionary {k} to string ---")
-                pp.pprint(v)
-                print(f" ->  {todo_line}")
+            logger.debug("\n --- Dictionary, %s ---",k)
+            logger.debug(pprint.pformat(v,indent=4,compact=True,width=40))
+            logger.debug(" ->  %s",todo_line)
+
             todo_list.append(todo_line)
 
         return sorted(todo_list, key=str.lower, reverse=False)
@@ -723,18 +734,22 @@ class TodoList():
 
     CHANGED="CHANGED"
     DELETED="DELETED"
+    ADDED="ADDED"
+    ARCHIVED="ARCHIVED"
+    LIST_CHANGES=[ADDED,CHANGED,DELETED,ARCHIVED]
 
     def __init__(self,f:str) -> None:
         """ constructor, requires link to config file """
         self._config = TodoConfig(f)
-        self._show_info = self._config._show_info
         # check for correct configuration
         self._config.is_config_valid()
         self._todo_dict = {}
         self._archive_dict = {}
         self._counter = 0
         self._changed_todos = { TodoList.CHANGED:{},
-                                TodoList.DELETED:{}}
+                                TodoList.DELETED:{},
+                                TodoList.ADDED:{},
+                                TodoList.ARCHIVED:{} }
 
     @property
     def config(self):
@@ -748,23 +763,25 @@ class TodoList():
         f_todo=self._config.file_todo
         todo_list = fm.read_txt_file(f_todo)
 
-        self._todo_dict = Todo.get_dict_from_todo(todo_list,self._show_info,origin=TodoConfig.TODO)
+        self._todo_dict = Todo.get_dict_from_todo(todo_list,origin=TodoConfig.TODO)
         self._counter = len(self._todo_dict )
 
-        # create amend version of todo
         for index, todo_dict_item in self._todo_dict.items():
             todo_dict_item[Todo.PROPERTY_NEW]=self.get_todo(index)
+            todo_dict_item[Todo.PROPERTY_COLORIZED]=self.get_todo(index,is_colored=True)
 
         if read_archive:
             start_index = 1
             f_archive=self._config._file_archive
             archive_list = fm.read_txt_file(f_archive)
-            self._archive_dict = Todo.get_dict_from_todo(archive_list,self._show_info,origin=TodoConfig.ARCHIVE,start_index=start_index)
+            self._archive_dict = Todo.get_dict_from_todo(archive_list,origin=TodoConfig.ARCHIVE,start_index=start_index)
+            default_prio=self.config.default_prio
+            add_date_changed=self.config.date_changed
             for index, arch_dict_item in self._archive_dict.items():
-                arch_dict_item[Todo.PROPERTY_NEW]=self.get_todo(index)
+                Todo.amend(arch_dict_item,default_prio,add_date_changed,self.config.color_map)
 
     def backup(self):
-        """ Creates a backup """
+        """ Creates a backup of both archive and todo """
         #   s=colorize(value.strftime("%Y-%m-%d"),color)
         prefix=DateTime.now().strftime("%Y%m%d_%H%M%S")+"_"
         p_backup = self._config._path_backup
@@ -772,12 +789,12 @@ class TodoList():
         f_todo_backup=os.path.join(p_backup, prefix+self._config.todo_backup)
         f_todo_archive=self._config._file_archive
         f_todo_archive_backup=os.path.join(p_backup, prefix+self._config.archive_backup)
-        if self._show_info:
-            print("### Archiving")
-            print(f"    -{f_todo}")
-            print(f"     {f_todo_backup}")
-            print(f"    -{f_todo_archive}")
-            print(f"     {f_todo_archive_backup}")
+
+        logger.debug("### Archiving")
+        logger.debug("    -%s",f_todo)
+        logger.debug("     %s",f_todo_backup)
+        logger.debug("    -%s",f_todo_archive)
+        logger.debug("     %s",f_todo_archive_backup)
         shutil.copy(src=f_todo,dst=f_todo_backup)
         shutil.copy(src=f_todo_archive,dst=f_todo_archive_backup)
 
@@ -787,9 +804,197 @@ class TodoList():
         default_prio=self._config.default_prio
         add_date_change=self._config.date_changed
         if not todo_dict:
-            print(f"Couldn't find Todo Item at index {index}")
+            logger.warning("Couldn't find Todo Item at index %s",index)
             return
-        return Todo.amend(todo_dict,default_prio,add_date_change=add_date_change,show_info=self._show_info)
+        todo_dict_amend = Todo.amend(todo_dict,default_prio,add_date_change,self.config.color_map)
+        if todo_dict_amend.get(Todo.PROPERTY_CHANGED) is True:
+            self._changed_todos[TodoList.CHANGED][index]=todo_dict
+        return todo_dict_amend
+
+    def _amend_todo_dict(self,todo_dict:dict):
+        """ amends the transferred dict by standard settings """
+        default_prio=self._config.default_prio
+        add_date_change=self._config.date_changed
+        # TODO RECOLOR
+        return Todo.amend(todo_dict,default_prio,add_date_change)
+
+    def add_todo(self,todo_str:str):
+        """ adds a todo item to the todo list """
+        counter=self._counter+1
+        todo_dict = Todo.get_dict_from_todo(todo_list=[todo_str],start_index=counter)[counter]
+        self._todo_dict[counter]=self._amend_todo_dict(todo_dict)
+        self._counter=counter
+        self._changed_todos[TodoList.ADDED][counter]=todo_dict
+
+
+    def _get_amended_todo_str(self,todo_str,colorize:bool=False):
+        """ returns the amended version of a todo string """
+        todo_dict = Todo.get_dict_from_todo([todo_str])[1]
+        self._amend_todo_dict(todo_dict)
+        if colorize:
+            return Todo.get_todo(todo_dict,color_map=self.config.color_map)
+        else:
+            return Todo.get_todo(todo_dict)
+
+    def add_todo_input(self):
+        """ adds a todo item with additional display of information """
+        stats=self.get_stats()
+        color_map=self.config.color_map
+        contexts=sorted(list(stats.get(Todo.PROPERTY_CONTEXTS,{}).keys()))
+        projects=sorted(list(stats.get(Todo.PROPERTY_PROJECTS,{}).keys()))
+        attributes=sorted(list(stats.get(Todo.PROPERTY_ATTRIBUTES,{}).keys()))
+        col={"prj":color_map.get(Todo.PROPERTY_PROJECTS),
+             "ctx":color_map.get(Todo.PROPERTY_CONTEXTS),
+             "att":color_map.get(Todo.PROPERTY_ATTRIBUTES)
+             }
+        if self.config.color_map:
+            color_map=self.config.color_map
+            contexts=[Todo.colorize("@"+c,col["ctx"]) for c in contexts]
+            projects=[Todo.colorize("+"+p,col["prj"]) for p in projects]
+            attributes=[Todo.colorize(a,col["att"]) for a in attributes]
+        print(Todo.colorize("PROJECTS  : ",col["prj"]),", ".join(projects))
+        print(Todo.colorize("CONTEXTS  : ",col["ctx"]),", ".join(contexts))
+        print(Todo.colorize("ATTRIBUTES: ",col["att"]),", ".join(attributes))
+        new_todo_s=input("NEW:\n")
+        if new_todo_s == "":
+            print("No Input")
+            return
+        colorize = self.config.colorize
+        new_todo_colored=self._get_amended_todo_str(new_todo_s,colorize)
+        print(f"ADDING LINE ({self._counter+1})\n{new_todo_colored}")
+        self.add_todo(new_todo_s)
+
+    def save(self,output:bool=False):
+        """ save all changes (also on console)"""
+
+        def _clean_change_log():
+            """ get rid of duplicates in changed todo list"""
+            arch_keys=list(self._changed_todos.get(TodoList.ARCHIVED,{}).keys())
+            del_keys=list(self._changed_todos.get(TodoList.DELETED,{}).keys())
+            add_keys=list(self._changed_todos.get(TodoList.ADDED,{}).keys())
+            changed_keys=list(set([*arch_keys,*del_keys,*add_keys]))
+            meta_keys=self._changed_todos.get(TodoList.CHANGED,{}).keys()
+
+            for changed_key in changed_keys:
+                if changed_key in meta_keys:
+                    _ = self._changed_todos.get(TodoList.CHANGED).pop(changed_key)
+
+        _clean_change_log()
+
+        color=None
+        archive_list=[]
+        todo_list=[]
+
+        if output:
+            print("\n####   SAVE CHANGES (TODO LIST)")
+            if self.config.colorize:
+                color=self.config.color_map.get(Todo.PROPERTY_COMPLETE)
+
+
+        for index in sorted(list(self._todo_dict.keys())):
+            todo_s=self.get_todo(index)
+            todo_out = todo_s
+            if output and self.config.colorize:
+                todo_out=self.get_todo(index,is_colored=self.config.colorize)
+                todo_list.append(todo_s)
+                if self._todo_dict[index].get(Todo.PROPERTY_CHANGED,False) is True:
+                    chg="(CHG) "
+                else:
+                    chg="      "
+                print(f"{chg} [{str(index).zfill(3)}] {todo_out}")
+
+        # update archive if items were archived
+        new_archive_item_dict = self._changed_todos.get(TodoList.ARCHIVED)
+        if new_archive_item_dict:
+
+            archive_output=[]
+            idx=1
+
+            for index in sorted(list(new_archive_item_dict.keys())):
+                arch_todo = new_archive_item_dict[index][Todo.PROPERTY_NEW]
+                archive_list.append(arch_todo)
+                if output:
+                    out_s = f"(ARC)  [{str(index).zfill(3)}] {Todo.colorize(arch_todo,color)}"
+                    archive_output.append(out_s)
+                    idx += 1
+
+            for index in sorted(list(self._archive_dict.keys())):
+                arch_todo = self._archive_dict[index][Todo.PROPERTY_NEW]
+                archive_list.append(arch_todo)
+                if output:
+                    out_s = f"       [{str(idx).zfill(3)}] {Todo.colorize(arch_todo,color)}"
+                    archive_output.append(out_s)
+                    idx += 1
+
+            if output:
+                print("\n####   SAVE CHANGES (TODO ARCHIVE)")
+                _ = [print(arch_todo) for arch_todo in archive_output]
+
+        if output:
+            deleted_item_dict = self._changed_todos.get(TodoList.DELETED)
+            if deleted_item_dict:
+                print("\n####   DELETIONS")
+                deletion_list=[]
+                for index in sorted(list(deleted_item_dict.keys())):
+                    del_todo = deleted_item_dict[index][Todo.PROPERTY_NEW]
+                    out_s = f"(DEL)  [{str(index).zfill(3)}] {Todo.colorize(del_todo,color)}"
+                    deletion_list.append(out_s)
+                _ = [print(del_todo) for del_todo in deletion_list]
+
+            changes_s="\n####   CHANGES: "
+            for change in TodoList.LIST_CHANGES:
+                if self._changed_todos.get(change):
+                    changes_s += change+":"+str(list(self._changed_todos.get(change).keys()))+"; "
+            print(changes_s)
+        
+    def complete(self,index:int):
+        """ completes a todo """
+        todo_dict = self._todo_dict.get(index)
+        todo_dict[Todo.PROPERTY_COMPLETE]=True
+        Todo.amend(todo_dict,color_map=self.config.color_map)
+
+    def change_todo_input(self,index:int):
+        """ changes todo using dialog / displays previous todo """
+
+        colorize = self.config.colorize
+        old_todo_s=self._todo_dict[index].get(Todo.PROPERTY_ORIGINAL)
+        if not old_todo_s:
+            logger.warning("Couldn't access ols todo string for todo %s",index)
+        old_todo_colored=self._get_amended_todo_str(old_todo_s,colorize)
+        old_todo_s=self._get_amended_todo_str(old_todo_s)
+        print(f"CHANGE TODO [{index}]:\n{old_todo_colored}")
+        new_todo_s=input("CHANGE:\n")
+        if new_todo_s == old_todo_s or new_todo_s == "":
+            print("Nothing changed/No Input")
+            return
+        # check for valid input
+        new_todo_colored=self._get_amended_todo_str(new_todo_s,colorize)
+        print(f"CHANGING TO\n{new_todo_colored}")
+        self.change_todo(index,new_todo_s)
+
+    def change_todo(self,index:int, todo_str:str):
+        """ change / replace the todo by input / returns the changed item """
+        todo_dict = Todo.get_dict_from_todo(todo_list=[todo_str],start_index=index)[index]
+        todo_dict = self._amend_todo_dict(todo_dict)
+
+        try:
+            todo_dict_old = self._todo_dict.pop(index)
+            self._changed_todos[TodoList.CHANGED][index]=todo_dict_old
+        except KeyError as e:
+            logger.warning("Index %s, not found %s",index,e.with_traceback)
+            return
+        self._todo_dict[index]=todo_dict
+        return todo_dict
+
+    def delete(self,index:int):
+        """ delete the given todo item, returns deleted item """
+        try:
+            todo_dict = self._todo_dict.pop(index)
+            self._changed_todos[TodoList.DELETED][index]=todo_dict
+            return todo_dict
+        except KeyError as e:
+            logger.warning("Index %s, not found %s",index,e.with_traceback)
+            return
 
     def get_todo(self,index:int,is_colored=False,as_dict=False,as_json=False):
         """ gets the item as text / color formatted todo / dict item / json
@@ -797,16 +1002,37 @@ class TodoList():
 
         # todo_dict = self._todo_dict.get(index,{})
         todo_dict = self.amend(index)
-
         if as_dict:
             return todo_dict
         elif as_json:
-            return pprint.pformat(todo_dict,indent=4)
-        else:
-            color_map=None
+            return pprint.pformat(todo_dict,indent=4)        
+        else: 
             if is_colored:
-                color_map=self._config.color_map
-            return Todo.get_todo(todo_dict,color_map)
+                return todo_dict.get(Todo.PROPERTY_COLORIZED)
+            else:
+                return todo_dict.get(Todo.PROPERTY_NEW)
+
+        # if as_dict:
+        #     return todo_dict
+        # elif as_json:
+        #     return pprint.pformat(todo_dict,indent=4)
+        # else:
+        #     color_map=None
+        #     if is_colored:
+        #         color_map=self._config.color_map
+        #     return Todo.get_todo(todo_dict,color_map)
+
+    def archive(self):
+        """ moves completed items to archive """
+        delete_index=[]
+        for index,todo_dict in self._todo_dict.items():
+            if todo_dict.get(Todo.PROPERTY_COMPLETE) is True:
+                delete_index.append(index)
+                self._changed_todos[TodoList.ARCHIVED][index]=todo_dict.copy()
+        for index in delete_index:
+            _ = self._todo_dict.pop(index)
+            # self.delete_todo(index)
+
 
     def print_config(self)->str:
         """ prints config generated from yaml configuration """
@@ -941,8 +1167,6 @@ class TodoList():
 
         return out_dict
 
-    # TODO ADD METHOD TO ADD ITEM TO LIST
-    # TODO ADD METHOD TO REMOVE ITEM FROM LIST
     # TODO CHANGE TOdo set completed
     # TODO ARCHIVE ITEM
     # TODO COLOR PRIORITY LABEL
@@ -973,17 +1197,15 @@ class TodoFilter():
 
     VALID_FILTER_ROPERTIES = [PROPERTY,REGEX,INCLUDE,DATE_FROM,DATE_TO,VALUE,INFO,TYPE]
 
-    def __init__(self,filter_config:dict,show_info:bool=False, property_list:list=None) -> None:
+    def __init__(self,filter_config:dict, property_list:list=None) -> None:
         """ Constructor gets filter settings from TodoConfig """
         self._filter_config = filter_config
         self._filter_dict = None
         self._filter_sets = None
-        self._show_info = show_info
         self._property_list = property_list
 
         if not filter_config:
-            if self._show_info:
-                print("No Filter Configuration")
+            logger.warning("No Filter Configuration")
 
         # parse all filters
         self._parse_config_dict(self._filter_config)
@@ -1034,27 +1256,25 @@ class TodoFilter():
         for filter_name , filter_properties in filter_list.items():
 
             filter_properties[TodoFilter.TYPE]=None
-            if self._show_info:
-                print(f"### Configuring Filter {filter_name}")
+            logger.debug("### Configuring Filter %s",filter_name)
 
             # check for correct FILTER LIST PROPERTIES
             filter_property_keys=list(filter_properties.keys())
             props_valid = [prop in TodoFilter.VALID_FILTER_ROPERTIES for prop in filter_property_keys]
             if not all(props_valid):
-                print(f"Filter {filter_name} has invalid attributes: {filter_property_keys}, pls check")
+                logger.error("Filter %s has invalid attributes: %s, pls check",filter_name,filter_property_keys)
                 continue
 
 
             if not filter_properties.get(TodoFilter.PROPERTY):
-                if self._show_info:
-                    print(f"Filter: {filter_name}, no PROPERTY found, will be set to ORIGINAL TODO Line")
+                logger.warning("Filter: %s, no PROPERTY found, will be set to ORIGINAL TODO Line",filter_name)
                 filter_properties[TodoFilter.PROPERTY]=TodoFilter.PROPERTY_ORIGINAL
 
             # CHECK FOR CORRECT PROPERTY  FIELDS IF LIST AVAILABLE
             if self._property_list:
                 prop = filter_properties.get(TodoFilter.PROPERTY)
                 if not prop in self._property_list:
-                    print(f"Filter: {filter_name}, PROPERTY with value {property} can not be validated, check")
+                    logger.warn("Filter: %s, PROPERTY with value %s can not be validated, check",filter_name,property)
                     continue
 
             filter_properties[TodoFilter.INCLUDE] = filter_properties.get(TodoFilter.INCLUDE,True)
@@ -1086,16 +1306,16 @@ class TodoFilter():
             #self._filter_sets = self._filter_config.get(TodoFilter.FILTER_SETS)
 
             for filterset_name, filter_list in filter_sets.items():
-                if self._show_info:
-                    print(f"### Check Filter Set {filterset_name}")
+                logger.debug("### Check Filter Set %s",filterset_name)
                 exist = [v in valid_filters for v in filter_list]
                 if not all(exist):
-                    print(f"### FILTERSET {filterset_name} contains invalid filter references and will be ignored please check")
+                    logger.warning("### FILTERSET %s contains invalid filter references and will be ignored please check",filterset_name)
                     continue
                 self._filter_sets[filterset_name]=filter_list
 
     def get_filter_settings_dict(self):
         """ returns validated filter data """
+        # TODO COLORIZE DICT
         return {
            TodoFilter.FILTER_LIST: self._filter_dict,
            TodoFilter.FILTER_SETS: self._filter_sets
@@ -1124,23 +1344,23 @@ class TodoFilter():
         # get filter
         filter_sets=self._filter_sets.get(filter_set_name)
         if not filter_sets:
-            print(f"Could not find filter set {filter_set_name}")
+            logger.warning("Could not find filter set %s",filter_set_name)
             return
 
         for filter_name in filter_sets:
             filter_dict = self._filter_dict.get(filter_name)
             if not filter_dict:
-                print(f"Could not find filter {filter_name}, filter set {filter_set_name}")
+                logger.warning(f"Could not find filter %s, filter set %s",filter_name,filter_set_name)
                 return
 
             filter_type = filter_dict.get(TodoFilter.TYPE)
             if not filter_type:
-                print(f"Could not find filter type for filter set {filter_set_name}")
+                logger.warning(f"Could not find filter type for filter set %s",filter_set_name)
                 return
 
             todo_property = filter_dict.get(TodoFilter.PROPERTY)
             if not todo_property:
-                print(f"Couldn't find Todo Property for filter set {filter_set_name}")
+                logger.warning(f"Couldn't find Todo Property for filter set %s",filter_set_name)
                 return
 
             if search_term:
@@ -1148,14 +1368,14 @@ class TodoFilter():
             else:
                 pattern = filter_dict.get(TodoFilter.PATTERN)
                 if not pattern:
-                    print(f"Couldn't find Todo Search Pattern property for filter set {filter_set_name}")
+                    logger.warning(f"Couldn't find Todo Search Pattern property for filter set %s",filter_set_name)
                     return
 
             prop = Todo.PROPERTY_DICT.get(todo_property)
             value = todo_dict.get(prop)
 
             if value is None:
-                print(f"Couldn't find Value for Property {todo_property} using filter set {filter_set_name}")
+                logger.warning("Couldn't find Value for Property %s using filter set %s",todo_property,filter_set_name)
                 return
 
             # do the test for the various options
@@ -1175,7 +1395,7 @@ class TodoFilter():
             elif filter_type == TodoFilter.DATE:
                 passed = filter_date(value,pattern)
             else:
-                print(f"Invalid filter Type {filter_type} used in filter {filter_name}, check")
+                logger.warning("Invalid filter Type %s used in filter %s, check",filter_type,filter_name)
                 return
 
             # now check for including / excluding criteria
