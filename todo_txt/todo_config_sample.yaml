@@ -135,7 +135,7 @@ FILTER:
   FILTER_SETS:                 # Filter Sets, will be used to filter using list of defined filters 
     FILTER_WRONG:              # example filter all tasks prio A-C completed last two weeks
       - FILTER_COMPLETEDX      # check that this filter set wil not be used 
-      - FILTER_COMPLETED_LAST_2WEEKSX
+      - FILTER_COMPLETED_LAST_2WEEKS
     FILTER_SETCOMPLETED_LAST_2WEEKS: # example filter all tasks prio A-C completed last two weeks
       - FILTER_COMPLETED
       - FILTER_COMPLETED_LAST_2WEEKS

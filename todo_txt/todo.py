@@ -19,6 +19,8 @@ from pandas import DataFrame
 from pandas.api.types import is_datetime64_any_dtype
 from tools import file_module as fm
 import logging
+import shlex
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,14 @@ class TodoConfig:
     SETTINGS_DEFAULT_PRIO="DEFAULT_PRIO"
     SETTINGS_ADD_HASH="ADD_HASH"
     SETTINGS_COLORIZE="COLORIZE"
+    SETTINGS_DEFAULT_EDITOR="DEFAULT_EDITOR"
+    EDITOR_SETTINGS="EDITOR"
+    FILE_EDITOR="FILE_EDITOR"
+    FILE_ARGS="ARGS"
+    FILE_EDITOR_CMD="EDITOR_CMD"
+    EDITOR="_EDITOR_" # placeholder
+    EDITOR_PATH="_PATH_"
+    EDITOR_LINE="_LINE_"
 
     @staticmethod
     def get_filepath(p:str,f:str):
@@ -70,6 +80,8 @@ class TodoConfig:
         self._path_backup = None # path to backup files
         self._color_map = None # mapping task segment to color
         self._colorize = False # colorize output
+        self._default_editor = None
+        self._editor_settings = {}
         # self._show_info = False # show verbose info should be replaced by log
         self._date_changed = False # flag add date of changed when task was changed
         self._create_backup = False # Flag if backup needs to be created
@@ -85,9 +97,19 @@ class TodoConfig:
         self.read_config(f)
 
     @property
+    def default_editor(self):
+        """ colorize output """
+        return self._default_editor
+
+    @property
     def colorize(self):
         """ colorize output """
         return self._colorize
+
+    @property
+    def editor_settings(self):
+        """ colorize output """
+        return self._editor_settings
 
     @property
     def filter(self):
@@ -210,6 +232,10 @@ class TodoConfig:
             self._add_hash = settings_dict.get(TodoConfig.SETTINGS_ADD_HASH,False) # Add Hash Attribute to Todo
             self._default_prio = settings_dict.get(TodoConfig.SETTINGS_DEFAULT_PRIO,"B") # Default Prio
             self._create_backup = settings_dict.get(TodoConfig.SETTINGS_CREATE_BACKUP,False)
+            self._default_editor = settings_dict.get(TodoConfig.SETTINGS_DEFAULT_EDITOR) # Default Editor
+
+        if config_dict.get(TodoConfig.SETTINGS):
+            self._editor_settings=config_dict.get(TodoConfig.EDITOR_SETTINGS)
 
         if config_dict.get(TodoConfig.TODO):
             c=config_dict.get(TodoConfig.TODO)
@@ -516,8 +542,8 @@ class Todo:
                         v_prop=v_prop.strftime("%Y-%m-%d")
                     # skip old hash value
                     if k_prop.upper() == Todo.PROPERTY_HASH.upper():
-                        continue                    
-                    # skip old CHANGED DATE VALUE will be treated below 
+                        continue
+                    # skip old CHANGED DATE VALUE will be treated below
                     if k_prop.lower() == Todo.ATTRIBUTE_DATE_CHANGED:
                         continue
                     s_prop=Todo.colorize(k_prop,color)
@@ -939,7 +965,7 @@ class TodoList():
                 todo_s = Todo.colorize(todo_s,self.config.color_map[Todo.PROPERTY_COMPLETE])
                 s+="["+str(index).zfill(3)+"] "+todo_s
                 todo_out_dict[index]=s
-        
+
         if todo_out_dict:
             todo_out = [todo_out_dict[index] for index in sorted(list(todo_out_dict.keys()))]
 
@@ -971,8 +997,8 @@ class TodoList():
             _ = [print(todo) for todo in todo_out]
 
         if archived_out:
-            print("\n####  ARCHIVE CHANGES")            
-            _ = [print(todo) for todo in archived_out]            
+            print("\n####  ARCHIVE CHANGES")
+            _ = [print(todo) for todo in archived_out]
 
 
     def save(self,show:bool=False):
@@ -1000,7 +1026,7 @@ class TodoList():
                 archive_list.append(arch_todo)
 
         if show:
-            self.show(display_deleted=True,display_archive=True)                
+            self.show(display_deleted=True,display_archive=True)
 
         config = self.config
         d_prefix=DateTime.now().strftime("%Y%m%d_%H%M%S")+"_"
@@ -1010,7 +1036,7 @@ class TodoList():
         if self.config.create_backup:
             path_backup = config._path_backup
             f_backup_archive_name = os.path.join(path_backup,d_prefix+config.archive_backup)
-            f_backup_todo_name = os.path.join(path_backup,d_prefix+config.todo_backup)        
+            f_backup_todo_name = os.path.join(path_backup,d_prefix+config.todo_backup)
             logger.info("Create backup file %s of Todo File",f_backup_todo_name)
             shutil.copy(f_todo,f_backup_todo_name)
             logger.info("Create backup file %s of Archive File",f_backup_archive_name)
@@ -1018,9 +1044,9 @@ class TodoList():
 
         if todo_list:
             fm.save_txt_file(f_todo,"\n".join(todo_list))
-        
+
         if archive_list:
-            fm.save_txt_file(f_archive,"\n".join(archive_list))            
+            fm.save_txt_file(f_archive,"\n".join(archive_list))
 
     def complete(self,index:int):
         """ completes a todo """
@@ -1472,3 +1498,105 @@ class TodoFilter():
 
         filter_passed = all(filter_passed)
         return filter_passed
+
+class TodoClient() :
+    """ command line client """
+
+    def __init__(self,f:str) -> None:
+        """ constructor """
+        self._todo_list = TodoList(f)
+        self._default_editor=self._todo_list.config.default_editor
+        self._cmd_editor_dict = {}
+        self._setup_editors()
+
+
+    def open(self,line:int=1,editor:str=None,archive:bool=False):
+        """ open todo/archive in editor """
+        editors = list(self._cmd_editor_dict.keys())
+        # get the editor: default or any specified
+        if not editor:
+            if not self._default_editor:
+                logger.warn("Default Editor %s not set, check settings",self._default_editor)
+                return
+            editor = self._default_editor
+        else:
+            if not editor in editors:
+                logger.warn("Editor %s not found, check settings",editor)
+                return
+        editor_dict = self._cmd_editor_dict.get(editor)
+        if archive is True:
+            file_type=TodoConfig.ARCHIVE
+        else:
+            file_type=TodoConfig.TODO
+        logger.info("[%s], use Editor Dict %s",file_type,editor_dict)
+        args_in = editor_dict.get(file_type)
+        args=[arg.replace(TodoConfig.EDITOR_LINE,str(line)) for arg in args_in]
+        logger.info("Open Editor: %s"," ".join(args))
+        try:
+            pid = subprocess.Popen(args, shell=False, stdin=None, stdout=None, stderr=None,
+                        close_fds=True, creationflags=subprocess.DETACHED_PROCESS).pid
+            logger.info("Started Editor (%s), PID %s",editor,pid)
+
+        except Exception as e:
+            logging.error(e,exc_info=True)
+
+
+
+    def _setup_editors(self):
+        """ build up directory to launch editor """
+        #.get(TodoConfig.SETTINGS)
+
+        editor_settings_dict = self._todo_list.config.editor_settings
+
+        f_todo=self._todo_list.config.file_todo
+        f_archive=self._todo_list.config.file_archive
+
+        todo_files_dict= { TodoConfig.TODO: f_todo,
+                           TodoConfig.ARCHIVE: f_archive}
+
+        cmd_dict={}
+        for editor,editor_settings in editor_settings_dict.items():
+            editor_dict={}
+            for f,file_path in todo_files_dict.items():
+                args=[]
+                f_editor=editor_settings.get(TodoConfig.FILE_EDITOR)
+                replacement_dict={TodoConfig.EDITOR:f_editor}
+                replacement_dict[TodoConfig.EDITOR_PATH]=file_path
+
+                if not shutil.which(f_editor):
+                    logger.warning("file editor reference %s is not an executable",f_editor)
+                    continue
+
+                cmd_editor=editor_settings.get(TodoConfig.FILE_EDITOR_CMD)
+                if cmd_editor:
+                    args=shlex.split(cmd_editor)
+                else:
+                    args=[]
+                add_args=editor_settings.get(TodoConfig.FILE_ARGS)
+                if add_args:
+                    args.extend(add_args)
+
+                args_replaced = []
+                for arg in args:
+                    for replacement_str,value in replacement_dict.items():
+                        arg=arg.replace(replacement_str,value)
+                    args_replaced.append(arg)
+                args=args_replaced
+                logger.info("Editor Command for %s (%s): [%s] ",editor,f," ".join(args))
+                editor_dict[f]=args
+            cmd_dict[editor]=editor_dict
+        # set default editor: check if it is there otherwise use the first occurence
+        if self._default_editor:
+            if not self._default_editor in list(cmd_dict.keys()):
+                self._default_editor = None
+        if not self._default_editor and cmd_dict:
+            self._default_editor = list(cmd_dict.keys())[0]
+        logger.info("Default Editor set to %s",self._default_editor)
+
+        self._cmd_editor_dict = cmd_dict
+
+
+
+
+
+

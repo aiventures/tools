@@ -32,5 +32,8 @@ todo_list.read_list(read_archive=True)
 todo_dict=todo_list.get_todo(2,as_dict=True)
 # todo_list.backup()
 
+sample_task="This is a new Task +TestProject @TestContext1 testatt1:testvalue "
+
+
 # print(todo)
 print("END")
