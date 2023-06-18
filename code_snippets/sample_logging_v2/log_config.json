@@ -1,0 +1,192 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {
+    "brief": {
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H:%M:%S",
+      "format": "{levelname:8s}; {name:<15s}; {message:s}"
+    }, 
+    "default":{
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H%M%S",
+      "format": "{asctime:s} {levelname:8s} {module:s}:[{name:s}.{funcName:s}({lineno:4d}]: {message:s}"    
+    },
+    "standard": {
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H:%M:%S",
+      "format": "{levelname:8s}; {asctime:s}; {name:<25s} {funcName:<15s} {lineno:4d}; {message:s}"
+    },
+    "multi-process": {
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H:%M:%S",
+      "format": "{levelname:8s}; {process:5d}; {asctime:s}; {name:<15s} {lineno:4d}; {message:s}"
+    },
+    "multi-thread": {
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H:%M:%S",
+      "format": "{levelname:8s}; {threadName:5d}; {asctime:s}; {name:<20s} {lineno:4d}; {message:s}"
+    },
+    "verbose": {
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H:%M:%S",
+      "format": "verbose {levelname:<8s}; {process:5d}; {threadName:5s}; {asctime:s}; {name:<25s} {lineno:4d}; {message:s}"
+    },
+    "file_handler1": {
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H:%M:%S",
+      "format": "f_hndl1 {levelname:8s}; {process:5d}; {threadName:8s}; {asctime:s}; {name:<25s} {lineno:4d}; {message:s}"
+    },    
+    "sample_logging_v2": {
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H:%M:%S",
+      "format": "sample_logging_v2 {levelname:8s}; {process:5d}; {threadName:8s}; {asctime:s}; {name:<15s} {lineno:4d}; {message:s}"
+    },  
+    "sample_logging_v2.sublog": {
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H:%M:%S",
+      "format": "sample_logging_v2.sublog {levelname:8s}; {process:5d}; {threadName:8s}; {asctime:s}; {name:<15s} {lineno:4d}; {message:s}"
+    },      
+    "__main__": {
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H:%M:%S",
+      "format": "__main__ {levelname:8s}; {process:5d}; {threadName:8s}; {asctime:s}; {name:<15s} {lineno:4d}; {message:s}"
+    },  
+    "__main__.sublog": {
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H:%M:%S",
+      "format": "__main__.sublog {levelname:8s}; {process:5d}; {threadName:8s}; {asctime:s}; {name:<15s} {lineno:4d}; {message:s}"
+    },     
+    "root": {
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H:%M:%S",
+      "format": "root {levelname:8s}; {process:5d}; {threadName:8s}; {asctime:s}; {name:<15s} {lineno:4d}; {message:s}"
+    },            
+    "multiline": {
+      "class": "logging.Formatter",
+      "style": "{",
+      "datefmt": "%Y%m%d_%H:%M:%S",
+      "format": "{levelname:8s}\n{process:5d}\n{threadName:8s}\n{asctime:s}\n{name:<15s}{lineno:4d}\n{message:s}\n"
+    }
+  },
+  "handlers": {
+    "stdout":{
+      "level": "DEBUG",
+      "class": "logging.StreamHandler",
+      "formatter": "default",
+      "stream" : "ext://sys.stdout"
+    },        
+    "root":{
+      "level": "DEBUG",
+      "class": "logging.StreamHandler",
+      "formatter": "root",
+      "stream" : "ext://sys.stdout"
+    },
+    "sample_logging_v2":{
+      "level": "DEBUG",
+      "class": "logging.StreamHandler",
+      "formatter": "sample_logging_v2",
+      "stream" : "ext://sys.stdout"
+    },    
+    "sample_logging_v2.sublog":{
+      "level": "DEBUG",
+      "class": "logging.StreamHandler",
+      "formatter": "sample_logging_v2.sublog",
+      "stream" : "ext://sys.stdout"
+    },     
+    "__main__":{
+      "level": "DEBUG",
+      "class": "logging.StreamHandler",
+      "formatter": "__main__",
+      "stream" : "ext://sys.stdout"
+    },    
+    "__main__.sublog":{
+      "level": "DEBUG",
+      "class": "logging.StreamHandler",
+      "formatter": "__main__.sublog",
+      "stream" : "ext://sys.stdout"
+    },          
+    "rotatingfile": {
+      "level": "DEBUG",
+      "class": "logging.handlers.RotatingFileHandler",
+      "maxBytes": 520,
+      "backupCount": 3,
+      "formatter": "verbose",
+      "filename": "./log/rot_file_handler.log",
+      "mode": "a",
+      "encoding": "utf-8"
+    },       
+    "console":{
+      "level": "DEBUG",
+      "class": "logging.StreamHandler",
+      "formatter": "verbose",
+      "stream" : "ext://sys.stdout"
+    },
+    "file_handler1": {
+      "level": "INFO",
+      "class": "logging.handlers.WatchedFileHandler",
+      "formatter": "file_handler1",
+      "filename": "./log/file_handler.log",
+      "mode": "a",
+      "encoding": "utf-8"
+    },
+    "file_handler": {
+      "level": "INFO",
+      "class": "logging.handlers.WatchedFileHandler",
+      "formatter": "verbose",
+      "filename": "./log/file_handler.log",
+      "mode": "a",
+      "encoding": "utf-8"
+    },
+    "null_handler": {
+      "level": "INFO",
+      "class": "logging.NullHandler"
+    }    
+  },
+  "loggers": {
+    "apixxx": {
+      "handlers": ["sample_logging_v2","file_handler"],
+      "level": "WARN",
+      "propagate": false
+    }, 
+    "null_logger": {
+      "handlers": ["null_handler"],
+      "level": "WARN",
+      "propagate": false
+    },         
+    "sample_logging_v2": {
+      "handlers": ["sample_logging_v2","file_handler"],
+      "level": "DEBUG",
+      "propagate": false
+    },  
+    "sample_logging_v2.sublog": {
+      "handlers": ["sample_logging_v2.sublog"],
+      "level": "ERROR",
+      "propagate": true
+    },
+    "root": {
+      "handlers": ["root","file_handler1"],
+      "level": "WARN"
+    },
+    "default": {
+      "handlers": ["stdout"],
+      "level": "WARN"
+    },
+    "multiple_out": {
+      "handlers": ["stdout","file_handler"],
+      "level": "INFO"
+    }      
+  }
+}

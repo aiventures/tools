@@ -1505,9 +1505,38 @@ class TodoClient() :
     def __init__(self,f:str) -> None:
         """ constructor """
         self._todo_list = TodoList(f)
+        if not self._todo_list:
+            logger.warning(f"Couldn't instanciate Todo List defined in {f}")
+            return
+        self._todo_list.read_list(read_archive=True)        
         self._default_editor=self._todo_list.config.default_editor
         self._cmd_editor_dict = {}
         self._setup_editors()
+
+    def display_list(self)->None:
+        """ output list """
+        pass
+
+    def display_stats(self)->None:
+        """ show meta information"""
+        stats =  self._todo_list.get_stats()
+        # set colors for list header and items
+        color_map=self._todo_list.config.color_map        
+        color_default=color_map.get(TodoConfig.COLOR_DEFAULT,None)
+        print("### TODO LIST STATS ###")
+        out_s=[]
+        for stat_type in (list(stats.keys())):
+            if stat_type == Todo.PROPERTY_DATE_LIST:
+                continue
+            stats_dict = stats[stat_type]
+            color = color_map.get(stat_type,color_default)
+            title=Todo.colorize(stat_type+": ",color)
+            out_s.append(title+"\n")
+            for substat in sorted(list(stats_dict.keys())):
+                num = stats_dict[substat]
+                out_s.append("-   "+Todo.colorize(substat,color))
+                out_s.append(Todo.colorize(": "+str(num)+"\n",color_default))
+        print(" ".join(out_s))
 
 
     def open(self,line:int=1,editor:str=None,archive:bool=False):
