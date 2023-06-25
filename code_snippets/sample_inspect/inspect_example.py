@@ -114,11 +114,14 @@ class CodeInspector():
             #all variables including class vars
             #instance_variables = [attr for attr in dir(object) if not callable(getattr(object, attr)) 
             #                      and not attr.startswith("__")]
+        elif type == CodeInspector.MODULE:  
+            module = CodeInspector.MODULE
         else:
             instance_variables = []
 
         try:
             name=object_props[CodeInspector.ATTRIBUTE_NAME]
+
         except Exception as e:
             name=type
         key=module+":"+name+":"+type
@@ -161,22 +164,6 @@ class CodeInspector():
                 else:
                     is_instance = False
 
-            # if member_props[CodeInspector.ATTRIBUTE_OBJECTTYPE] == CodeInspector.FUNCTION:
-            #     if type == CodeInspector.CLASS:
-            #         is_instance= True
-            #     # when calling the class instance, all methods are functions ... 
-            #     # if method is in dict, then check for staticmethod                     
-            #     elif type == CodeInspector.CLASS_INSTANCE:
-
-            # elif member_props[CodeInspector.ATTRIBUTE_OBJECTTYPE] == CodeInspector.METHOD:
-            #     is_instance=False
-            # # check for static attributes
-            # else:
-            #     try:
-            #         # check if attributes can be found in object dict, if so, it is a static variable
-            #         is_instance = object.__dict__.get(member_name) is not None
-            #     except Exception as e:
-            #         pass
             member_props[CodeInspector.ATTRIBUTE_IS_INSTANCE]=is_instance
             members_dict[member_name]=member_props
 
@@ -189,8 +176,12 @@ class CodeInspector():
 
 if __name__ == "__main__":
     # InspectTest().inspect_object(module_myclass)
-    myclass = MyClass01()
-    object_info=CodeInspector().inspect_object(MyClass01)
+    #myclass = MyClass01()
+    #object_info=CodeInspector().inspect_object(MyClass01)
+    object_info=CodeInspector().inspect_object(module_myclass)
+    external_class=CodeInspector().inspect_object(object_info['members']['ExternalClass']["objref"])
+    class_info=object_info['members']['ExternalClass']["objref"]
+    external_class_instance=class_info()
 #    object_info=CodeInspector().inspect_object(myclass)
     pass
 #    InspectTest().inspect_class()
