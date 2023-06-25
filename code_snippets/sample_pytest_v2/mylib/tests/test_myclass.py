@@ -3,9 +3,9 @@
 from mypackage.module_myclass import MyClass01
 from mypackage.module_external import ExternalClass
 from unittest import mock
-from unittest.mock import patch, PropertyMock, Mock
+from unittest.mock import patch, PropertyMock, Mock, MagicMock
 import pytest
-
+import inspect
 
 
 def test_external_class_obj(mock_external_class_obj):
@@ -108,3 +108,29 @@ def test_call_mock_multiple(mock_external_api_call):
     # 3rd Call - Exception: verify that an exception was thrown using regex
     with pytest.raises(Exception,match=".*MOCK") as e:
         value = my_class01.get_external_api("test")
+
+def test_spy_pattern(mocker):
+    """ spy pattern  """
+    my_mocked_ext_class=MagicMock(name="MyHugoClass",spec=ExternalClass)
+    # mocking a returned instance
+    mock_returned_instance=MagicMock(name="MyHugoInstance",spec=ExternalClass)
+    # return the mock every time the constructor is called
+    # return value is the way to go, if you need to mock return of a method use
+    # my_mocked_ext_class.return_value.<method>.return_value
+    my_mocked_ext_class.return_value=mock_returned_instance
+    # spy on the method
+    spy_ext_method=mocker.spy(mock_returned_instance,"external_instance_method")
+    # patch the external class in the module under test
+    mocker.patch("mypackage.module_myclass.ExternalClass",my_mocked_ext_class)
+    # do the test
+    my_class01 = MyClass01()
+    ret_val=my_class01.get_external_api("my mock call")
+    assert spy_ext_method.called
+    pass
+
+
+    
+    
+    
+
+
