@@ -175,13 +175,13 @@ class CodeInspector():
         pass
 
 if __name__ == "__main__":
-    # InspectTest().inspect_object(module_myclass)
+    CodeInspector().inspect_object(module_myclass)
     #myclass = MyClass01()
     #object_info=CodeInspector().inspect_object(MyClass01)
-    object_info=CodeInspector().inspect_object(module_myclass)
-    external_class=CodeInspector().inspect_object(object_info['members']['ExternalClass']["objref"])
-    class_info=object_info['members']['ExternalClass']["objref"]
-    external_class_instance=class_info()
+    #object_info=CodeInspector().inspect_object(module_myclass)
+    #external_class=CodeInspector().inspect_object(object_info['members']['ExternalClass']["objref"])
+    #class_info=object_info['members']['ExternalClass']["objref"]
+    #external_class_instance=class_info()
 #    object_info=CodeInspector().inspect_object(myclass)
     pass
 #    InspectTest().inspect_class()
