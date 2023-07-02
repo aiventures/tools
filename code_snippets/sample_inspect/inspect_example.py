@@ -29,7 +29,8 @@ class CodeInspector():
     RELATION_MODULE_INSTANCE = "module_instance" # any type of things instanciated on module level
     RELATION_MODULE = "relation_module" # referred module
 
-    KEY="keys"
+    KEY="key"
+    KEY_DICT="key_dict"    
     CLASS = "CLASS"
     CLASS_INSTANCE = "CLASS_INSTANCE"
     BUILTIN = "BUILTIN"
@@ -39,10 +40,13 @@ class CodeInspector():
     ISMEMBERDESCRIPTOR = "ISMEMBER"
     ATTRIBUTE_SUPERCLASS = "superclass"
     ATTRIBUTE_OBJECTTYPE = "object_type"
+    ATTRIBUTE_TYPECLASS = "typeclass"
     ATTRIBUTE_IS_INSTANCE = "is_instance"
+    ATTRIBUTE_IS_SYSMODULE = "is_sysmodule"
     ATTRIBUTE_SIGNATURE = "signature"
     ATTRIBUTE_SCOPE = "scope"
     ATTRIBUTE_NAME="__name__"
+    ATTRIBUTE_CLASS_NAME="class_name"    
     ATTRIBUTE_MODULE="__module__"
     ATTRIBUTE_FILE="__file__"
     ATTRIBUTE_DOC="__doc__"
@@ -68,11 +72,36 @@ class CodeInspector():
     def is_pythonlib_subpath(p_path):
         """ checks if file path is subpath of python system path """
         is_subpath=[False]
-        p=os.path.realpath(p_path)
+        path_ref = Path(p_path)
+        # convert to path
+        if os.path.isfile(path_ref):
+            path_ref = Path(path_ref).parent
+
+        if not path_ref.is_dir():
+            logger.warning(f"Path {str(path_ref)} is not a directory")
+            return
+        p=os.path.realpath(path_ref)
         python_syspaths = [os.path.realpath(sys.base_exec_prefix),os.path.realpath(sys.exec_prefix)]
         for python_syspath in python_syspaths:
             is_subpath.append(python_syspath == p or p.startswith(python_syspath+os.sep))
         return any(is_subpath)
+    
+    @staticmethod
+    def get_object_key(key_dict):
+        """ constructs an obkect key from key dict  """
+        atts= [ CodeInspector.ATTRIBUTE_OBJECTTYPE,
+                CodeInspector.ATTRIBUTE_TYPECLASS,
+                CodeInspector.ATTRIBUTE_PACKAGE,
+                CodeInspector.ATTRIBUTE_MODULE,
+                CodeInspector.ATTRIBUTE_CLASS_NAME,
+                CodeInspector.ATTRIBUTE_NAME]
+        key_list=[]
+        for att in atts:
+            value= key_dict.get(att,"NO_ATTRIBUTE_"+att) 
+            if not value:
+                value = "NO_ATTRIBUTE_"+att
+            key_list.append(value)
+        return ":".join(key_list)
 
     @staticmethod
     def get_type(object):
@@ -110,20 +139,63 @@ class CodeInspector():
         for att in CodeInspector.MEMBER_PRIVATE_ATTRIBUTES:
             if hasattr(object,att):
                 object_props[att]=getattr(object,att)
+                if att == CodeInspector.ATTRIBUTE_FILE:
+                    object_props[CodeInspector.ATTRIBUTE_IS_SYSMODULE] = CodeInspector.is_pythonlib_subpath(object_props[att])
         object_props[CodeInspector.ATTRIBUTE_OBJECTTYPE]=object_type
 
         # now check method /( object signatures ) if there are any
         signature_dict = {}
         try:
+            # todo use get annotations method instead of attributes
             signature_dict = object.__annotations__
             for param,value in signature_dict.items():
                 signature_dict[param]=value.__name__
             object_props[CodeInspector.ATTRIBUTE_SIGNATURE]=signature_dict
         except AttributeError:
+            logger.warning(f"couldn't get annotations for object {object_props.get(CodeInspector.__new__)}")
             pass
 
-        object_props[CodeInspector.ATTRIBUTE_OBJREF]=object
+        # construct a key:
+        object_type = object_props.get(CodeInspector.ATTRIBUTE_OBJECTTYPE)
+        object_type_class = object.__class__.__name__
+        object_package = object_props.get(CodeInspector.ATTRIBUTE_PACKAGE)
+        object_module = object_props.get(CodeInspector.ATTRIBUTE_MODULE)
+        object_class = None
+        object_name = object_props.get(CodeInspector.ATTRIBUTE_NAME)
 
+        # special cases
+        if object_type == CodeInspector.MODULE:
+            object_module = object_name
+        elif object_type == CodeInspector.CLASS_INSTANCE:
+            class_ref = object.__class__
+            object_class = class_ref.__name__
+            object_module = class_ref.__module__
+            object_name = object_class
+        elif object_type == CodeInspector.CLASS:
+            object_class = object.__name__
+
+        # try to get package from module
+        if object_module:
+            try:
+                object_package = sys.modules[object_module].__package__
+            except:
+                logger.warn(f"couldn't get package from module {object_module}")
+                object_package = None            
+
+        # construct object key: <OBJECT_TYPE>:<OBJECT_PACKAGE>:<OBJECT_MODULE>:<OBJECT_CLASS>:<OBJECT_NAME>
+
+
+        # key = ":".join([object_type,object_type_class, object_package,object_module,object_class,object_name])
+        key_dict = {    CodeInspector.ATTRIBUTE_OBJECTTYPE:object_type,
+                        CodeInspector.ATTRIBUTE_TYPECLASS:object_type_class,
+                        CodeInspector.ATTRIBUTE_PACKAGE:object_package,
+                        CodeInspector.ATTRIBUTE_MODULE:object_module,
+                        CodeInspector.ATTRIBUTE_CLASS_NAME:object_class,
+                        CodeInspector.ATTRIBUTE_NAME:object_name
+        }
+        object_props[CodeInspector.KEY_DICT] = key_dict
+        object_props[CodeInspector.KEY] = CodeInspector.get_object_key(key_dict)
+        object_props[CodeInspector.ATTRIBUTE_OBJREF]=object
 
         return object_props
 
@@ -141,23 +213,19 @@ class CodeInspector():
         # create an obbject key separate by colons
         module=object_props.get(CodeInspector.ATTRIBUTE_MODULE)
         type=object_props.get(CodeInspector.ATTRIBUTE_OBJECTTYPE)
+        key=object_props.get(CodeInspector.KEY)
 
         if type == CodeInspector.CLASS_INSTANCE:
             instance_variables = vars(object)
-            #all variables including class vars
-            #instance_variables = [attr for attr in dir(object) if not callable(getattr(object, attr))
-            #                      and not attr.startswith("__")]
         elif type == CodeInspector.MODULE:
             module = CodeInspector.MODULE
         else:
             instance_variables = []
 
         try:
-            name=object_props[CodeInspector.ATTRIBUTE_NAME]
-
+            name=key[CodeInspector.ATTRIBUTE_NAME]
         except Exception as e:
             name=type
-        key=module+":"+name+":"+type
 
         members_dict ={}
         members_list = inspect.getmembers(object)
@@ -198,19 +266,68 @@ class CodeInspector():
             member_props[CodeInspector.ATTRIBUTE_IS_INSTANCE]=is_instance
             members_dict[member_name]=member_props
 
+        key=object_props.get(CodeInspector.KEY)
+        key_dict=object_props.get(CodeInspector.KEY_DICT)
         return { CodeInspector.KEY:key,
+                 CodeInspector.KEY_DICT:key_dict,
                  CodeInspector.OBJECT:object_props,
                  CodeInspector.MEMBERS:members_dict
         }
 
-        pass
+    @staticmethod
+    def _get_class_info_from_module(module_info:dict):
+        """ gets class info from module """
+        out_dict = {}
+
+        module_object = module_info[CodeInspector.OBJECT]
+        module_name = module_object.get(CodeInspector.ATTRIBUTE_NAME)
+        logger.info(f"Get Classes from module {module_name}")
+
+        class_infos_dict = { CodeInspector.INSTANCE: {},
+                             CodeInspector.CLASS: {} }        
+        members_dict = module_info.get(CodeInspector.MEMBERS)
+        class_types = [CodeInspector.CLASS,CodeInspector.CLASS_INSTANCE]
+        for member_name, member_dict in members_dict.items():
+            object_type = member_dict.get(CodeInspector.ATTRIBUTE_OBJECTTYPE)
+            if not object_type in class_types:
+                continue
+            object = member_dict.get(CodeInspector.ATTRIBUTE_OBJREF)
+            # try to instanciate to class instance to get instance attributes
+            info_class_instance = None
+            # check class 
+            if object_type == CodeInspector.CLASS:
+                object_class = object
+                try:
+                    logger.debug(f"Get object instance for Class {member_name}")
+                    # try to get instance from class to get instance variables
+                    object_instance = member_dict.get(CodeInspector.ATTRIBUTE_OBJREF)()
+                except:
+                    object_instance = None
+                    logger.debug(f"Could not get object instance, using Class definition of {member_name}")
+            # check class instance 
+            else:
+                logger.debug(f"Anaylzing object Class instance {member_name}")
+                object_instance = member_dict.get(CodeInspector.ATTRIBUTE_OBJREF)
+                # try to get class from object instance 
+                try:
+                    object_class = object_instance.__class__
+                except Exception as e:
+                    object_class = None
+                    logger.warning(f"Couldn't retreieve class from class instance {member_name}")
+
+            objects = [object_class,object_instance]
+            for obj in objects:
+                metainfo =  CodeInspector().inspect_object(obj)
+                key = metainfo.get(CodeInspector.KEY)
+                out_dict[key]=metainfo
+
+        return  out_dict
 
     @staticmethod
-    def inspect_module(module_object):
+    def _get_module_info(module_object):
         """ analyses module object """
 
         object = module_object.get(CodeInspector.OBJECT)
-
         if not object:
             logger.warning("Passed object may not be valid object info")
             return
@@ -219,6 +336,11 @@ class CodeInspector():
             return
         object_module_name=object.get(CodeInspector.ATTRIBUTE_NAME)
         object_module_package=object.get(CodeInspector.ATTRIBUTE_PACKAGE)
+
+        # check if module is a module somewhere in syspath 
+        is_syspath = CodeInspector.is_pythonlib_subpath(Path(sys.modules[object_module_name].__file__))
+        object[CodeInspector.ATTRIBUTE_IS_SYSMODULE] = is_syspath
+
         members = module_object.get(CodeInspector.MEMBERS)
         logger.info(f"Analyzing module {object_module_name} (Package {object_module_package})")
 
@@ -268,8 +390,8 @@ class CodeInspector():
                 # assumes it will be a library module instead if not found
                 if member_name in module_variables:
                     logger.debug(f"Module {object_module_name}, Member {member_name} was found in module {imported_module}")
-                    file_ref_path = Path(sys.modules[imported_module].__file__).parent
-                    is_syspath = CodeInspector.is_pythonlib_subpath(file_ref_path)
+                    is_syspath = CodeInspector.is_pythonlib_subpath(Path(sys.modules[imported_module].__file__))
+
                     if not module_ref:
                         module_ref = imported_module
                         logger.debug(f"Module {object_module_name}, Referencing Member {member_name} to module {imported_module}")
@@ -320,7 +442,16 @@ if __name__ == "__main__":
 #    InspectTest().inspect_class()
 #    for object attributes the object need to be instanciated
 
-# Testing inspect of a module
+#   Testing inspect of a module
     info_module_myclass = CodeInspector().inspect_object(module_myclass)
-    meta_module_myclass =  CodeInspector.inspect_module(info_module_myclass)
+    module_info =  CodeInspector._get_module_info(info_module_myclass)
+    # getting the class / class instance metadata put into dictionary 
+    class_info = CodeInspector._get_class_info_from_module(module_info)
+
+    # check: retrieving class information using key i module package 
+    members = module_info["members"]    
+    for member_name, member_dict in members.items():
+        key = member_dict["key"]
+        class_info_member = class_info.get(key)
+
     pass
