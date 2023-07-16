@@ -19,25 +19,25 @@ class CodeInspector():
 
     STATIC="static"
     INSTANCE="instance"
-    MODULE = "MODULE"
-    FUNCTION = "FUNCTION"
-    PRIMITIVE = "PRIMITIVE"
-    METHOD = "METHOD"
-    RELATION = "RELATION"
+    MODULE = "module"
+    FUNCTION = "function"
+    PRIMITIVE = "primitive"
+    METHOD = "method"
+    RELATION = "relation"
     RELATION_IMPLEMENTS = "implements"
     RELATION_IMPORTS = "imports"
     RELATION_MODULE_INSTANCE = "module_instance" # any type of things instanciated on module level
     RELATION_MODULE = "relation_module" # referred module
 
     KEY="key"
-    KEY_DICT="key_dict"    
-    CLASS = "CLASS"
-    CLASS_INSTANCE = "CLASS_INSTANCE"
-    BUILTIN = "BUILTIN"
+    KEY_DICT="key_dict"
+    CLASS = "class"
+    CLASS_INSTANCE = "class_instance"
+    BUILTIN = "builtin"
     OBJECT="object"
     MEMBERS="members"
-    GETSETDESCRIPTOR = "GETSETDESCRIPTOR"
-    ISMEMBERDESCRIPTOR = "ISMEMBER"
+    GETSETDESCRIPTOR = "getsetdescriptor"
+    ISMEMBERDESCRIPTOR = "ismember"
     ATTRIBUTE_SUPERCLASS = "superclass"
     ATTRIBUTE_OBJECTTYPE = "object_type"
     ATTRIBUTE_TYPECLASS = "typeclass"
@@ -45,17 +45,59 @@ class CodeInspector():
     ATTRIBUTE_IS_SYSMODULE = "is_sysmodule"
     ATTRIBUTE_SIGNATURE = "signature"
     ATTRIBUTE_SCOPE = "scope"
-    ATTRIBUTE_NAME="__name__"
-    ATTRIBUTE_CLASS_NAME="class_name"    
-    ATTRIBUTE_MODULE="__module__"
-    ATTRIBUTE_FILE="__file__"
-    ATTRIBUTE_DOC="__doc__"
-    ATTRIBUTE_PACKAGE="__package__"
+    ATTRIBUTE__NAME__="__name__"
+    ATTRIBUTE_CLASS_NAME="class_name"
+    ATTRIBUTE__MODULE__="__module__"
+    ATTRIBUTE__FILE__="__file__"
+    ATTRIBUTE__DOC__="__doc__"
+    ATTRIBUTE__PACKAGE__="__package__"
+    ATTRIBUTE_NAME="name"
+    ATTRIBUTE_MODULE="module"
+    ATTRIBUTE_FILE="file"
+    ATTRIBUTE_DOC="doc"
+    ATTRIBUTE_PACKAGE="package"
     ATTRIBUTE_OBJREF="objref"
+    ATTRIBUTES_META = "attributes_meta"
 
-    MEMBER_PRIVATE_ATTRIBUTES=[ATTRIBUTE_NAME,ATTRIBUTE_MODULE,
-                               ATTRIBUTE_PACKAGE,ATTRIBUTE_DOC,
-                               ATTRIBUTE_FILE]
+
+    # mapping attributes in attribute map
+    ATTRIBUTE_MAP = {
+        ATTRIBUTE__NAME__ : ATTRIBUTE_NAME,
+        ATTRIBUTE__MODULE__ : ATTRIBUTE_MODULE,
+        ATTRIBUTE__FILE__:  ATTRIBUTE_FILE,
+        ATTRIBUTE__DOC__ : ATTRIBUTE_DOC,
+        ATTRIBUTE__PACKAGE__ : ATTRIBUTE_PACKAGE
+    }
+
+    KEY_DICT_ATTS= [ ATTRIBUTE_OBJECTTYPE,
+                     ATTRIBUTE_TYPECLASS,
+                     ATTRIBUTE__PACKAGE__,
+                     ATTRIBUTE__MODULE__,
+                     ATTRIBUTE_CLASS_NAME,
+                     ATTRIBUTE__NAME__,
+                     ]
+
+    # attribtue list for analysis dictionary
+    ATTRIBUTE_LIST = [
+        # generic
+        KEY,
+        KEY_DICT,
+        ATTRIBUTE__FILE__,
+        ATTRIBUTE__DOC__,
+        # module atts
+        ATTRIBUTE_IS_SYSMODULE,
+        RELATION,
+        RELATION_MODULE,
+        # class atts
+        ATTRIBUTE_SUPERCLASS,
+        ATTRIBUTE_IS_INSTANCE,
+        # functions
+        ATTRIBUTE_SIGNATURE,
+    ]
+
+    MEMBER_PRIVATE_ATTRIBUTES=[ATTRIBUTE__NAME__,ATTRIBUTE__MODULE__,
+                               ATTRIBUTE__PACKAGE__,ATTRIBUTE__DOC__,
+                               ATTRIBUTE__FILE__]
 
     TYPES = {
         MODULE:(lambda o:inspect.ismodule(o)),
@@ -67,6 +109,31 @@ class CodeInspector():
         ISMEMBERDESCRIPTOR:(lambda o: inspect.ismemberdescriptor(o)),
     }
 
+
+    @staticmethod
+    def _get_attributes_dict(obj:dict):
+        """ adds properties to object props """
+
+        attributes_dict = {}
+
+        # first process key_dict
+        obj_key_dict = obj.get(CodeInspector.KEY_DICT,{})
+        for att in CodeInspector.KEY_DICT_ATTS:
+            key = CodeInspector.ATTRIBUTE_MAP.get(att,att)
+            value = obj_key_dict.get(att)
+            if value is not None:
+                attributes_dict[key] = value
+
+        # then process other attribute
+        for att in CodeInspector.ATTRIBUTE_LIST:
+            key = CodeInspector.ATTRIBUTE_MAP.get(att,att)
+            value = obj.get(att)
+        
+            if value is not None:
+                attributes_dict[key] = value
+
+        # get key dict / map
+        return attributes_dict
 
     @staticmethod
     def is_pythonlib_subpath(p_path):
@@ -85,19 +152,13 @@ class CodeInspector():
         for python_syspath in python_syspaths:
             is_subpath.append(python_syspath == p or p.startswith(python_syspath+os.sep))
         return any(is_subpath)
-    
+
     @staticmethod
     def get_object_key(key_dict):
         """ constructs an obkect key from key dict  """
-        atts= [ CodeInspector.ATTRIBUTE_OBJECTTYPE,
-                CodeInspector.ATTRIBUTE_TYPECLASS,
-                CodeInspector.ATTRIBUTE_PACKAGE,
-                CodeInspector.ATTRIBUTE_MODULE,
-                CodeInspector.ATTRIBUTE_CLASS_NAME,
-                CodeInspector.ATTRIBUTE_NAME]
         key_list=[]
-        for att in atts:
-            value= key_dict.get(att,"NO_ATTRIBUTE_"+att) 
+        for att in CodeInspector.KEY_DICT_ATTS:
+            value= key_dict.get(att,"NO_ATTRIBUTE_"+att)
             if not value:
                 value = "NO_ATTRIBUTE_"+att
             key_list.append(value)
@@ -139,7 +200,7 @@ class CodeInspector():
         for att in CodeInspector.MEMBER_PRIVATE_ATTRIBUTES:
             if hasattr(object,att):
                 object_props[att]=getattr(object,att)
-                if att == CodeInspector.ATTRIBUTE_FILE:
+                if att == CodeInspector.ATTRIBUTE__FILE__:
                     object_props[CodeInspector.ATTRIBUTE_IS_SYSMODULE] = CodeInspector.is_pythonlib_subpath(object_props[att])
         object_props[CodeInspector.ATTRIBUTE_OBJECTTYPE]=object_type
 
@@ -158,10 +219,10 @@ class CodeInspector():
         # construct a key:
         object_type = object_props.get(CodeInspector.ATTRIBUTE_OBJECTTYPE)
         object_type_class = object.__class__.__name__
-        object_package = object_props.get(CodeInspector.ATTRIBUTE_PACKAGE)
-        object_module = object_props.get(CodeInspector.ATTRIBUTE_MODULE)
+        object_package = object_props.get(CodeInspector.ATTRIBUTE__PACKAGE__)
+        object_module = object_props.get(CodeInspector.ATTRIBUTE__MODULE__)
         object_class = None
-        object_name = object_props.get(CodeInspector.ATTRIBUTE_NAME)
+        object_name = object_props.get(CodeInspector.ATTRIBUTE__NAME__)
 
         # special cases
         if object_type == CodeInspector.MODULE:
@@ -180,7 +241,7 @@ class CodeInspector():
                 object_package = sys.modules[object_module].__package__
             except:
                 logger.warn(f"couldn't get package from module {object_module}")
-                object_package = None            
+                object_package = None
 
         # construct object key: <OBJECT_TYPE>:<OBJECT_PACKAGE>:<OBJECT_MODULE>:<OBJECT_CLASS>:<OBJECT_NAME>
 
@@ -188,10 +249,10 @@ class CodeInspector():
         # key = ":".join([object_type,object_type_class, object_package,object_module,object_class,object_name])
         key_dict = {    CodeInspector.ATTRIBUTE_OBJECTTYPE:object_type,
                         CodeInspector.ATTRIBUTE_TYPECLASS:object_type_class,
-                        CodeInspector.ATTRIBUTE_PACKAGE:object_package,
-                        CodeInspector.ATTRIBUTE_MODULE:object_module,
+                        CodeInspector.ATTRIBUTE__PACKAGE__:object_package,
+                        CodeInspector.ATTRIBUTE__MODULE__:object_module,
                         CodeInspector.ATTRIBUTE_CLASS_NAME:object_class,
-                        CodeInspector.ATTRIBUTE_NAME:object_name
+                        CodeInspector.ATTRIBUTE__NAME__:object_name
         }
         object_props[CodeInspector.KEY_DICT] = key_dict
         object_props[CodeInspector.KEY] = CodeInspector.get_object_key(key_dict)
@@ -211,7 +272,7 @@ class CodeInspector():
         object_props = CodeInspector.get_object_attributes(object)
 
         # create an obbject key separate by colons
-        module=object_props.get(CodeInspector.ATTRIBUTE_MODULE)
+        module=object_props.get(CodeInspector.ATTRIBUTE__MODULE__)
         type=object_props.get(CodeInspector.ATTRIBUTE_OBJECTTYPE)
         key=object_props.get(CodeInspector.KEY)
 
@@ -223,7 +284,7 @@ class CodeInspector():
             instance_variables = []
 
         try:
-            name=key[CodeInspector.ATTRIBUTE_NAME]
+            name=key[CodeInspector.ATTRIBUTE__NAME__]
         except Exception as e:
             name=type
 
@@ -235,7 +296,7 @@ class CodeInspector():
             if member_name.startswith("__"):
                 continue
             member_props = CodeInspector.get_object_attributes(member_object)
-            member_props[CodeInspector.ATTRIBUTE_NAME]=member_name
+            member_props[CodeInspector.ATTRIBUTE__NAME__]=member_name
             # check for static or instance methods methods
             if type == CodeInspector.CLASS_INSTANCE:
                 if member_props[CodeInspector.ATTRIBUTE_OBJECTTYPE] == CodeInspector.FUNCTION:
@@ -264,10 +325,12 @@ class CodeInspector():
                     is_instance = False
 
             member_props[CodeInspector.ATTRIBUTE_IS_INSTANCE]=is_instance
+            member_props[CodeInspector.ATTRIBUTES_META] = CodeInspector._get_attributes_dict(member_props)
             members_dict[member_name]=member_props
 
         key=object_props.get(CodeInspector.KEY)
         key_dict=object_props.get(CodeInspector.KEY_DICT)
+        object_props[CodeInspector.ATTRIBUTES_META] = CodeInspector._get_attributes_dict(object_props)
         return { CodeInspector.KEY:key,
                  CodeInspector.KEY_DICT:key_dict,
                  CodeInspector.OBJECT:object_props,
@@ -280,11 +343,11 @@ class CodeInspector():
         out_dict = {}
 
         module_object = module_info[CodeInspector.OBJECT]
-        module_name = module_object.get(CodeInspector.ATTRIBUTE_NAME)
+        module_name = module_object.get(CodeInspector.ATTRIBUTE__NAME__)
         logger.info(f"Get Classes from module {module_name}")
 
         class_infos_dict = { CodeInspector.INSTANCE: {},
-                             CodeInspector.CLASS: {} }        
+                             CodeInspector.CLASS: {} }
         members_dict = module_info.get(CodeInspector.MEMBERS)
         class_types = [CodeInspector.CLASS,CodeInspector.CLASS_INSTANCE]
         for member_name, member_dict in members_dict.items():
@@ -294,7 +357,7 @@ class CodeInspector():
             object = member_dict.get(CodeInspector.ATTRIBUTE_OBJREF)
             # try to instanciate to class instance to get instance attributes
             info_class_instance = None
-            # check class 
+            # check class
             if object_type == CodeInspector.CLASS:
                 object_class = object
                 try:
@@ -304,11 +367,11 @@ class CodeInspector():
                 except:
                     object_instance = None
                     logger.debug(f"Could not get object instance, using Class definition of {member_name}")
-            # check class instance 
+            # check class instance
             else:
                 logger.debug(f"Anaylzing object Class instance {member_name}")
                 object_instance = member_dict.get(CodeInspector.ATTRIBUTE_OBJREF)
-                # try to get class from object instance 
+                # try to get class from object instance
                 try:
                     object_class = object_instance.__class__
                 except Exception as e:
@@ -320,7 +383,7 @@ class CodeInspector():
                 metainfo =  CodeInspector().inspect_object(obj)
                 key = metainfo.get(CodeInspector.KEY)
                 out_dict[key]=metainfo
-
+            # ToDO get object props in one dictionary
         return  out_dict
 
     @staticmethod
@@ -334,12 +397,15 @@ class CodeInspector():
         if not object[CodeInspector.ATTRIBUTE_OBJECTTYPE] == CodeInspector.MODULE:
             logger.warning("Passed object is not a module")
             return
-        object_module_name=object.get(CodeInspector.ATTRIBUTE_NAME)
-        object_module_package=object.get(CodeInspector.ATTRIBUTE_PACKAGE)
+        object_module_name=object.get(CodeInspector.ATTRIBUTE__NAME__)
+        object_module_package=object.get(CodeInspector.ATTRIBUTE__PACKAGE__)
 
-        # check if module is a module somewhere in syspath 
+        # check if module is a module somewhere in syspath
         is_syspath = CodeInspector.is_pythonlib_subpath(Path(sys.modules[object_module_name].__file__))
         object[CodeInspector.ATTRIBUTE_IS_SYSMODULE] = is_syspath
+
+        object[CodeInspector.ATTRIBUTES_META] = CodeInspector._get_attributes_dict(object)
+
 
         members = module_object.get(CodeInspector.MEMBERS)
         logger.info(f"Analyzing module {object_module_name} (Package {object_module_package})")
@@ -348,9 +414,9 @@ class CodeInspector():
         imported_modules=[]
 
         for member_name, member_object in members.items():
-            member_module_name=member_object.get(CodeInspector.ATTRIBUTE_MODULE)
+            member_module_name=member_object.get(CodeInspector.ATTRIBUTE__MODULE__)
             member_object_type=member_object.get(CodeInspector.ATTRIBUTE_OBJECTTYPE)
-            member_package=member_object.get(CodeInspector.ATTRIBUTE_PACKAGE)
+            member_package=member_object.get(CodeInspector.ATTRIBUTE__PACKAGE__)
             # if module name is present, check for implementation in analysed module
             if member_module_name == object_module_name:
                 member_object[CodeInspector.RELATION]=CodeInspector.RELATION_IMPLEMENTS
@@ -374,7 +440,6 @@ class CodeInspector():
                     member_object[CodeInspector.RELATION]=CodeInspector.RELATION_MODULE_INSTANCE
                 logger.debug(f"Module {object_module_name}, imports {member_name} from {member_module_name}, type {member_object_type}")
                 continue
-
         # try to identify missing relations from imports
         logger.debug(f"Module {object_module_name}, imported modules: {imported_modules}")
 
@@ -416,42 +481,119 @@ class CodeInspector():
                     logger.debug(f"Module {object_module_name}, Member {member_name} (type {member_object_type}) is implemented in Module")
 
             if not member_object.get(CodeInspector.RELATION):
-                logger.warning(f"Couldn't assign a module relation of member {member_name}, type {member_object_type}")
-                
-        return module_object            
+                logger.warning(f"Couldn't assign a module relation of member {member_name}, type {member_object_type}")                
+            # get object props in one dictionary
+            member_object[CodeInspector.ATTRIBUTES_META] = CodeInspector._get_attributes_dict(member_object)
+
+        return module_object
+
+    @staticmethod
+    def get_meta_dict(info_obj):
+        """ gets metadata from module info  """
+        meta_out = {}        
+
+        try:
+            meta_out[CodeInspector.KEY] = info_obj[CodeInspector.KEY]
+            obj_metadata = info_obj[CodeInspector.OBJECT][CodeInspector.ATTRIBUTES_META]
+            rel = info_obj.get(CodeInspector.RELATION)
+            rel_module = info_obj.get(CodeInspector.RELATION_MODULE)
+            if rel and rel_module:
+                obj_metadata[CodeInspector.RELATION] = rel
+                obj_metadata[CodeInspector.RELATION_MODULE] = rel_module
+            meta_out[CodeInspector.OBJECT] = obj_metadata
+
+
+            members_dict = {}
+            for member, member_info in info_obj[CodeInspector.MEMBERS].items():
+                member_metadata = member_info[CodeInspector.ATTRIBUTES_META]
+                # add relations 
+                rel = member_info.get(CodeInspector.RELATION)
+                rel_module = member_info.get(CodeInspector.RELATION_MODULE)
+                if rel and rel_module:
+                    member_metadata[CodeInspector.RELATION] = rel
+                    member_metadata[CodeInspector.RELATION_MODULE] = rel_module
+                members_dict[member] = member_metadata
+            meta_out[CodeInspector.MEMBERS] = members_dict
+        except KeyError as e:       
+            logger.error(f"Key error occured, {e}")
+            return {}
+        
+        return meta_out
+
+class ObjectModel():
+    
+    """ builds the object model """
+    PACKAGES="PACKAGES"
+    MODULES="MODULES"
+    REL_SRC="SOURCE"
+    REL_TRG="TARGET"
+    REL_IMPLEMENTS="REL_IMPLEMENTS"
+    REL_IMPORTS="REL_IMPORTS"
+
+    REL_INHERITS="REL_INHERITS_FROM"
+    REL_IMPORTS="REL_INHERITS_FROM"
+
+    def __init__(self) -> None:
+        self._objects = {}
+        self._relations = {}        
+        self._classes = {}
+        self._class_instances = {}
+        self._packages = {}
+        self._modules = {}
+        # self.classes = {}
+        # self
+    
+    def create_model_from_module(self,module):
+        """ creates model from module """
+        info_module = CodeInspector().inspect_object(module)
+        module_info =  CodeInspector._get_module_info(info_module)        
+        module_meta_dict = CodeInspector.get_meta_dict(module_info)            
+        module_key = module_meta_dict.get(CodeInspector.KEY)
+        module_object = module_meta_dict.get(CodeInspector.OBJECT)
+        module_members =  module_meta_dict.get(CodeInspector.MEMBERS)
+        #         self._classes[class_name]=class_meta_dict
+        for module_member_name,modukle_member_dict in module_members.items():
+            # process items / add parent / children / etc. 
+            pass
+        
+    
+    def _create_model(self, metadict_list:list=None):
+        """ creates the object model  """
+        logger.info(f"create the object model from {len(metadict_list)} elements")
+        for o in metadict_list:
+            """ collect all objects in a dictionary """
+            object=o[CodeInspector.OBJECT]
+            object_key = object[CodeInspector.KEY]
+            object_name = object.get(CodeInspector.ATTRIBUTE_NAME,"Unknown Name")
+            self._objects[object_key]=object
+            for member_name,meta_info in o[CodeInspector.MEMBERS].items():
+                logger.debug(f"analyzing object {object_name}, member {member_name}")
+                member_key = meta_info[CodeInspector.KEY]
+                if not meta_info.get(CodeInspector.ATTRIBUTE_NAME):
+                    meta_info[CodeInspector.ATTRIBUTE_NAME] = member_name
+                self._objects[member_key]=meta_info
+                # set relation from member
+        pass
 
 if __name__ == "__main__":
     loglevel=logging.DEBUG
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
                         level=loglevel, stream=sys.stdout,datefmt="%Y-%m-%d %H:%M:%S")
+    om = ObjectModel()
+
+    # Testing inspect of a module
+    if True:
+        om.create_model_from_module(module_myclass)
+
+    # testing class metadata
+    if True:
+        myclass_info = CodeInspector().inspect_object(MyClass01)
+        class_meta_dict = CodeInspector.get_meta_dict(myclass_info)    
 
     # TODO get superclass location of a method
     #mysubclass_obj = MySubClass()
     #info_mysubclass_obj = CodeInspector().inspect_object(mysubclass_obj)
+    #meta_dict = CodeInspector.get_meta_dict(info_mysubclass_obj)
 
-    # info = CodeInspector().inspect_object(MySubClass)
-    # info = CodeInspector().inspect_object(module_myclass)
-    #myclass = MyClass01()
-    # object_info=CodeInspector().inspect_object(MyClass01)
-    #object_info=CodeInspector().inspect_object(module_myclass)
-    #external_class=CodeInspector().inspect_object(object_info['members']['ExternalClass']["objref"])
-    #class_info=object_info['members']['ExternalClass']["objref"]
-    #external_class_instance=class_info()
-#    object_info=CodeInspector().inspect_object(myclass)
-    pass
-#    InspectTest().inspect_class()
-#    for object attributes the object need to be instanciated
-
-#   Testing inspect of a module
-    info_module_myclass = CodeInspector().inspect_object(module_myclass)
-    module_info =  CodeInspector._get_module_info(info_module_myclass)
-    # getting the class / class instance metadata put into dictionary 
-    class_info = CodeInspector._get_class_info_from_module(module_info)
-
-    # check: retrieving class information using key i module package 
-    members = module_info["members"]    
-    for member_name, member_dict in members.items():
-        key = member_dict["key"]
-        class_info_member = class_info.get(key)
 
     pass

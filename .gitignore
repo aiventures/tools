@@ -18,8 +18,13 @@ pylint_msg.txt
 *.apk
 *.pyc
 
+# some parts of directories 
+/**/*_local.*
+/**/Config/*
+
 # Local Files
-*_local.*
+*_local
+*_tmp
 *_tmp.*
 
 # Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`

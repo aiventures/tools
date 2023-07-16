@@ -1,0 +1,4 @@
+# SIMPLE CONFIG FILE Lines are split at equal sign 
+MY_WORK_DIR=C:\...\<YOUR WORK DIR>
+MY_VENV_DIR=C:\...\<YOUR VENV DIR>
+
