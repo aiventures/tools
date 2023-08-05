@@ -15,6 +15,7 @@ from my_package import module_external
 from my_package import module_myclass
 from my_package.module_myclass import MyClass01
 from my_package.module_myclass import MySubClass
+from tools.tree_util import Tree
 
 logger = logging.getLogger(__name__)
 
@@ -732,55 +733,40 @@ class ObjectModel():
     def module_tree(self):
         """ module tree property """
         return self._module_tree        
-
+    
     def _create_package_hierarchy(self):
         """ creates package hierarchy """
         logger.info("Create Package Hierarchy")
         module_tree={}
-
+        module_tree[Tree.ROOT]={}
+        module_tree[Tree.ROOT][Tree.PARENT]=None
+        # build up tree from module name
+        
+        # collect all paths        
+        all_paths={}
         for full_module_name in self._module_model.keys():
-            module_parts=full_module_name.split(".")
-            module_name=module_parts[-1]
-            hash_module=ObjectModel.get_hash(full_module_name)
-            module_packages=module_parts[:-1]
-            level=len(module_packages)
-            # add module package tree 
-            for i in range(level):
-                parent_package_name=".".join(module_packages[:i])
-                package_name=".".join(module_packages[:i+1])
-                if not parent_package_name:
-                    parent_package_name = ObjectModel.ROOT
-                hash_parent=ObjectModel.get_hash(parent_package_name)
-                hash_package=ObjectModel.get_hash(package_name)
-                # add parent package
-                if not module_tree.get(hash_parent):
-                    parent_dict={ObjectModel.HASH:hash_parent,
-                                 ObjectModel.PACKAGE:parent_package_name,
-                                 ObjectModel.TYPE:ObjectModel.PACKAGE}
-                    module_tree[hash_parent]=parent_dict
-                # add containing package
-                if not module_tree.get(hash_package):
-                    package_dict={ObjectModel.HASH:hash_package,
-                                 ObjectModel.PACKAGE:package_name,
-                                 ObjectModel.TYPE:ObjectModel.PACKAGE,
-                                 ObjectModel.PARENT:hash_parent}
-                    module_tree[hash_package]=package_dict
-            
-            # add module to dict 
-            if level == 0:
-                package=ObjectModel.ROOT                
-            else:
-                package=".".join(module_packages)
-            
-            hash_package=ObjectModel.get_hash(package)
-            module_dict={ ObjectModel.HASH:hash_module,
-                          ObjectModel.MODULE:full_module_name,
-                          ObjectModel.MODULE_SHORT:module_name,
-                          ObjectModel.PACKAGE:package,
-                          ObjectModel.TYPE:ObjectModel.MODULE,
-                          ObjectModel.PARENT:hash_package}
-            module_tree[hash_module]=module_dict
-            self._module_tree=module_tree
+            # Tree.PARENT
+            # ensure there is always a root
+            module_path=Tree.ROOT+"."+full_module_name
+            module_parts=module_path.split(".")         
+            module_path=""
+            for num_elements in range(len(module_parts)):
+                module_path=".".join(module_parts[:num_elements+1])
+                all_paths[module_path]=None
+        # build up tree
+        all_paths=list(all_paths.keys())
+        for p in all_paths:
+            module_parts=p.split(".")            
+            last_elem=module_parts[-1]
+            if last_elem == Tree.ROOT:
+                continue
+            parent_path=".".join(module_parts[:-1])
+            module_tree[p]={}
+            module_tree[p][Tree.PARENT]=parent_path
+        path_tree = Tree()
+        path_tree.create_tree(module_tree)
+        ls=path_tree.get_leaf_siblings()
+        self._module_tree=path_tree
             
     @staticmethod
     def get_hash(s:str):

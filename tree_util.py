@@ -11,6 +11,7 @@ class Tree():
     CHILDREN="children"
     NAME="name"
     NODE="node"
+    ROOT="root"
 
     def __init__(self) -> None:
         logger.debug("Tree Constructor")
@@ -168,8 +169,17 @@ class Tree():
 
         return parents
 
-    def get_siblings(self,node_id)->list:
-        """ gets the list of siblings """
+    def get_siblings(self,node_id,only_leaves=True)->list:
+        """ gets the list of siblings and only leaves """
+
+        def is_leaf(node_id):
+            """ checks if node is leaf """
+            node_info=self._hierarchy_nodes_dict.get(node_id)
+            if not node_info.get(Tree.CHILDREN):
+                return True
+            else:
+                return False
+
         siblings=[]
         current_node=self._hierarchy_nodes_dict.get(node_id)
         if not current_node:
@@ -180,13 +190,43 @@ class Tree():
             parent_node=self._hierarchy_nodes_dict.get(parent_id)
             siblings=parent_node.get(Tree.CHILDREN)
             siblings=[elem for elem in siblings if not elem==node_id]
+        
+        if only_leaves:
+            siblings=[elem for elem in siblings if is_leaf(elem)]
 
         return siblings
+
+    def get_leaves(self)->list:
+        """ returns the leaves of the tree """
+        leaves=[]
+        for node,node_info in self._hierarchy_nodes_dict.items():
+            if node_info.get(Tree.CHILDREN):
+                continue
+            leaves.append(node)
+        return leaves
+
+    def get_leaf_siblings(self)->dict:
+        """ gets sibling leaves alongside with parent node path """
+        leaves = self.get_leaves()
+        leaf_siblings = []
+        # processed list
+        processed=dict(zip(leaves,len(leaves)*[False]))
+        for leaf in leaves:
+            if processed[leaf]:
+                continue
+            siblings=[leaf]
+            siblings.extend(self.get_siblings(leaf))
+            for sibling in siblings:
+                processed[sibling]=True
+            predecessors=self.get_predecessors(leaf)
+            leaf_siblings.append([siblings,predecessors])
+
+        return leaf_siblings
 
 if __name__ == "__main__":
     loglevel=logging.DEBUG
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
-                        level=loglevel, stream=sys.stdout,datefmt="%Y-%m-%d %H:%M:%S")    
+                        level=loglevel, stream=sys.stdout,datefmt="%Y-%m-%d %H:%M:%S")
     tree={
         1:{"parent":None},
         2:{"parent":1},
@@ -205,10 +245,9 @@ if __name__ == "__main__":
     my_hierarchy=my_tree.hierarchy
     my_levels=my_tree.max_level
 
-    # tree_dict=my_tree.create_tree(tree)
-
-    #my_hierarchy=my_tree._get_hierarchy()
     children=my_tree.get_children(1)
     my_parents=my_tree.get_predecessors(8)
     my_siblings=my_tree.get_siblings(8)
+    my_leaves=my_tree.get_leaves()
+    my_leave_siblings=my_tree.get_leave_siblings()
     pass
