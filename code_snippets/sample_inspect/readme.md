@@ -17,7 +17,7 @@ java -jar "C:\<path_to\plantuml.jar" test.plantuml
 start test.png
 ```
 
-**Generating the Class Diagfram**  
+**Generating the Class Diagram**  
 A generated sample plantuml class diagram file using the classes in this folder: [`sample.plantuml`](artifacts/sample.plantuml).  
 ![sample uml class diagram](artifacts/sample.png)
 
@@ -27,3 +27,6 @@ A generated sample plantuml class diagram file using the classes in this folder:
 A generated sample plantuml component diagram file using the classes in this folder: [`sample_package.plantuml`](artifacts/sample.plantuml).  
 ![sample uml component diagram ](artifacts/sample_package.png)
 **NOTE**: This diagram requires the `tree utility` for generation
+
+**Limitations**
+* Annotations not supported
