@@ -36,6 +36,7 @@ class CodeInspector():
     RETURN = "return"
     RELATION = "relation"
     RELATION_IMPLEMENTS = "implements"
+    RELATION_INHERITS = "inherits"
     RELATION_IMPORTS = "imports"
     # any type of things instanciated on module level
     RELATION_MODULE_INSTANCE = "module_instance"
@@ -101,7 +102,7 @@ class CodeInspector():
                      ATTRIBUTE_CLASS_NAME,
                      ATTRIBUTE__NAME__,
                      ]
-    
+
     KEY_DICT_ATTS2 = [# ATTRIBUTE_OBJECTTYPE,
                       # ATTRIBUTE_TYPECLASS,
                       ATTRIBUTE__PACKAGE__,
@@ -146,16 +147,7 @@ class CodeInspector():
     def get_hash(s: str):
         """ calculate hash """
         hash_value = hashlib.md5(s.encode()).hexdigest()
-
         return hash_value
-    
-    @staticmethod
-    def get_object_hash():
-        """ calculate hash for object """
-        # treat class instances and classes as same objects when calculating hash value
-        #if s.startswith(CodeInspector.CLASS_INSTANCE):
-        #    s=s.replace(CodeInspector.CLASS_INSTANCE,CodeInspector.CLASS)        
-        pass
 
     @staticmethod
     def _get_attributes_dict(obj: dict):
@@ -448,7 +440,7 @@ class CodeInspector():
                 metainfo = CodeInspector().inspect_object(obj)
                 key = metainfo.get(CodeInspector.KEY)
                 out_dict[key] = metainfo
-            # ToDO get object props in one dictionary
+
         return out_dict
 
     @staticmethod
@@ -650,8 +642,6 @@ class ObjectModelGenerator():
         module_info = CodeInspector._get_module_info(info_module)
         module_meta_dict = CodeInspector.get_meta_dict(module_info)
         module_object = module_meta_dict.get(CodeInspector.OBJECT)
-        # replace hash calculation on the basis of module name
-        # module_key = module_meta_dict.get(CodeInspector.KEY)
         module_key = module_object.get(CodeInspector.MODULE)
         if module_key:
             module_hash = CodeInspector.get_hash(module_key)
@@ -883,10 +873,12 @@ class PlantUMLRenderer():
     # DOC_UML = "@startuml\nset namespaceSeparator none\n_CONTENT_\n@enduml"
     DOC_UML ="\n".join(["@startuml",
                 "set namespaceSeparator none",
+                "skinparam linetype ortho",
+                "'skinparam linetype polyline",
                 "<style>",
                 ".moduleclass { BackgroundColor LightBlue }",
                 "</style>",
-                "_CONTENT_",               
+                "_CONTENT_",
                 "hide <<moduleclass>> stereotype",
                 "@enduml"])
     COMPONENT = "_COMPONENT_"
@@ -1039,11 +1031,11 @@ class PlantUMLRenderer():
                             f"Couldn't find plantuml for attribute {attribute}, {vis} object part {object_part} ")
                         continue
         return "\n".join(out_list)
-    
+
     def _render_module(self, uml_rendered_module: dict):
-        """ renders the module """        
+        """ renders the module """
         uml_module = 'package "_module_" as _hash_ <<module>> {\n_uml_inner_\n}'
-        uml = 'class "_module_" as _clsmoduleid_ <<moduleclass>> {\n_uml_inner_\n}'        
+        uml = 'class "_module_" as _clsmoduleid_ << (M,APPLICATION) moduleclass >> {\n_uml_inner_\n}'
 
         params = {"_module_": "", "_uml_inner_": "", "_hash_": ""}
         module = uml_rendered_module.get(CodeInspector.ATTRIBUTE_NAME)
@@ -1080,7 +1072,7 @@ class PlantUMLRenderer():
         uml = uml_module
         for k, v in params.items():
             uml = uml.replace(k, v)
-        # add links 
+        # add links
         uml="\n".join([uml,*uml_links])+"\n"
         uml_rendered_module[PlantUMLRenderer.PLANTUML] = uml
         return uml
@@ -1403,20 +1395,35 @@ class PlantUMLRenderer():
             [hash_source, symbol, hash_target])
         return rel_dict
 
+    @staticmethod
+    def _render_relations(relations)->dict:
+        """ renders the relations alongside with a comment """
+        relations_out={}
+        for i,relation in enumerate(relations):
+            src=relation.get(CodeInspector.NODE_SOURCE)
+            src_obj=src.get(CodeInspector.ATTRIBUTE_OBJECTTYPE)
+            src_key=src.get(CodeInspector.KEY)
+            trg=relation.get(CodeInspector.NODE_TARGET)
+            trg_obj=trg.get(CodeInspector.ATTRIBUTE_OBJECTTYPE)
+            trg_key=trg.get(CodeInspector.KEY)
+            relation_s=relation.get(CodeInspector.RELATION)
+            plantuml=relation.get(PlantUMLRenderer.PLANTUML)
+            comment=f"'# RELATION ({i}) [{src_obj}-{relation_s}-{trg_obj}]: {src_key} - {trg_key} \n"
+            relations_out[plantuml]={PlantUMLRenderer.PLANTUML:(comment+plantuml)}
+        return relations_out
+
     def render_class_diagram(self) -> str:
         """ renders all plantuml items """
         doc_uml = PlantUMLRenderer.DOC_UML
         uml_inner = []
         modules, relations, related_objects = self._collect_render_objects()
+        relations_dict=PlantUMLRenderer._render_relations(relations)
         logger.debug("start")
-        relations_list = [r.get(PlantUMLRenderer.PLANTUML)
-                          for r in relations if r.get(PlantUMLRenderer.PLANTUML)]
-        relations_list = list(set(relations_list))
-        relations_list = [{PlantUMLRenderer.PLANTUML: r}
-                          for r in relations_list]
-        relations_dict = dict(zip(range(len(relations_list)), relations_list))
-        render_object_dicts = (modules, related_objects, relations_dict)
-        for render_object_dict in render_object_dicts:
+        render_object_dicts={"\n'### MODULES":modules,
+                            "\n'### RELATED OBJECTS":related_objects,
+                            "\n'### RELATIONS":relations_dict}
+        for comment,render_object_dict in render_object_dicts.items():
+            uml_inner.append(comment)
             for object, obj_info in render_object_dict.items():
                 uml = obj_info.get(PlantUMLRenderer.PLANTUML)
                 if uml:
@@ -1424,13 +1431,95 @@ class PlantUMLRenderer():
                     uml_inner.append(uml)
                 else:
                     logger.warning(
-                        f"No plantuml snippet found for oobject {object}")
+                        f"No plantuml snippet found for object {object}")
         doc_uml = doc_uml.replace(
             PlantUMLRenderer.UML_CONTENT, "\n".join(uml_inner))
         return doc_uml
 
+    @staticmethod
+    def _collect_superclass_info(obj_info):
+        """ creates superclass relation """
+        # create relation dict
+        rel_dict = PlantUMLRenderer._create_relation_dict()
+        rel_dict[PlantUMLRenderer.UML_SYNMBOL]=PlantUMLRenderer.UML_INHERIT
+        rel_dict[CodeInspector.RELATION]=CodeInspector.RELATION_INHERITS
+        node_source=rel_dict[CodeInspector.NODE_SOURCE]
+        node_target=rel_dict[CodeInspector.NODE_TARGET]
+
+        attributes=[CodeInspector.ATTRIBUTE_NAME,CodeInspector.MODULE,CodeInspector.ATTRIBUTE_PACKAGE,
+                    CodeInspector.KEY,CodeInspector.HASH,CodeInspector.RELATION_MODULE]
+        superclass_info={}
+        logger.debug("start")
+        superclass_meta=obj_info.get(CodeInspector.ATTRIBUTE_SUPERCLASS)
+        if not superclass_meta:
+            return
+        for attribute in attributes:
+            superclass_info[attribute]=obj_info.get(attribute)
+        try:
+            superclass_name=superclass_meta.__name__
+            superclass_module=superclass_meta.__module__
+            superclass_package=superclass_module
+
+        except AttributeError:
+            logger.warning("couldn't find __name__ attribute")
+            return
+
+        if not superclass_name:
+            logger.warning(f"No superclass found for Class {superclass_info[CodeInspector.ATTRIBUTE_NAME]}")
+            return
+        superclass_info[CodeInspector.ATTRIBUTE_SUPERCLASS_NAME]=superclass_name
+        superclass_info[CodeInspector.RELATION]=CodeInspector.RELATION_INHERITS
+        # get key and hash
+        superclass_key_dict={}
+        superclass_key_dict[CodeInspector.ATTRIBUTE__MODULE__]=superclass_module
+        # get the complete module path without module name
+        superclass_package=".".join(superclass_module.split(".")[:-1])
+        superclass_key_dict[CodeInspector.ATTRIBUTE__PACKAGE__]=superclass_package
+        superclass_key_dict[CodeInspector.ATTRIBUTE__NAME__]=superclass_name
+        superclass_key=CodeInspector.get_object_key(superclass_key_dict)
+        superclass_hash=CodeInspector.get_hash(superclass_key)
+        # copy over node information
+        node_source[CodeInspector.ATTRIBUTE_NAME] = superclass_name
+        node_source[CodeInspector.ATTRIBUTE_PACKAGE] = superclass_package
+        node_source[CodeInspector.ATTRIBUTE_MODULE] = superclass_module
+        node_source[CodeInspector.HASH] = superclass_hash
+        node_source[CodeInspector.KEY] = superclass_key
+        node_source[CodeInspector.OBJECT] = superclass_meta
+        for attribute in node_target.keys():
+            node_target[attribute]=obj_info.get(attribute)
+        node_target[CodeInspector.OBJECT]=obj_info
+        uml_symbol=" "+rel_dict[PlantUMLRenderer.UML_SYNMBOL]+" "
+        rel_dict[PlantUMLRenderer.PLANTUML]=uml_symbol.join([node_source[CodeInspector.HASH],node_target[CodeInspector.HASH]])
+        trg_class=node_target[CodeInspector.ATTRIBUTE_NAME]
+        trg_package=node_target[CodeInspector.ATTRIBUTE_PACKAGE]
+        logger.debug(f"Relation  {superclass_name} ({superclass_package})  <|-- {trg_class} ({trg_package}) ")
+        logger.debug(f"PLANTUML {rel_dict[PlantUMLRenderer.PLANTUML]}")
+        return rel_dict
+
+    @staticmethod
+    def _validate_relations(uml_relation_list:list,obj_dict:dict)->list:
+        """ validates relations for invbalid entries """
+        validated_rel_list=[]
+        logger.debug("start")
+        hash_list=list(obj_dict.keys())
+        for uml_relation in uml_relation_list:
+            src=uml_relation[CodeInspector.NODE_SOURCE]
+            trg=uml_relation[CodeInspector.NODE_TARGET]
+            rel_hashes=[src.get(CodeInspector.HASH),trg.get(CodeInspector.HASH)]
+            hashes_valid=[r in hash_list for r in rel_hashes]
+            logger.debug(f"Validate {src.get(CodeInspector.KEY)} {uml_relation[CodeInspector.RELATION]} {trg.get(CodeInspector.KEY)}")
+            plantuml=uml_relation.get(PlantUMLRenderer.PLANTUML)
+            logger.debug(f"PLANTUML {plantuml}, {hashes_valid}")
+            hashes_valid=all(hashes_valid)
+            if not hashes_valid:
+                logger.warning(f"Relation {plantuml} is not valid")
+            else:
+                validated_rel_list.append(uml_relation)
+        return validated_rel_list
+
     def _collect_render_objects(self) -> tuple:
-        """ collect renderings of modules, functions, vars, classes relations """
+        """ central method to collect renderings of modules, functions, vars, classes relations """
+
         # classes rendered as plantuml
         uml_class_list = []
         # relations collected
@@ -1440,6 +1529,7 @@ class PlantUMLRenderer():
 
         model = self._model
         rendererd_modules = {}
+        uml_superclass_relations=[]
         for module, module_info in model.modules.items():
             objects_dict[module_info[CodeInspector.HASH]] = module_info
             uml_rendered_module = PlantUMLRenderer._create_render_dict()
@@ -1467,20 +1557,23 @@ class PlantUMLRenderer():
                 CodeInspector.RELATION_IMPLEMENTS)
             for object_implemented, obj_info in objects_implemented.items():
                 obj_type = obj_info.get(CodeInspector.ATTRIBUTE_OBJECTTYPE)
-                hash = obj_info.get(CodeInspector.HASH)
-                objects_dict[hash] = obj_info
+                hash_value = obj_info.get(CodeInspector.HASH)
+                superclass_info=PlantUMLRenderer._collect_superclass_info(obj_info)
+                if superclass_info:
+                    uml_superclass_relations.append(superclass_info)
+
+                objects_dict[hash_value] = obj_info
                 uml_s = None
                 if obj_type == CodeInspector.CLASS:
                     logger.debug(
                         f"Rendering class {object_implemented}, get relations")
                     class_info = classes_implemented.get(object_implemented)
                     uml_type, vis, uml_s = self._render_class(class_info)
-                    # render module-class relation
-                    # TODO RENDER Relations classes to module
-                    #rel=PlantUMLRenderer._create_module_obj_relation(module_info,class_info,relation=CodeInspector.RELATION_IMPLEMENTS)
-                    #if rel:
-                    #   uml_relation_list.append(rel)
-
+                elif obj_type == CodeInspector.CLASS_INSTANCE:
+                    uml_type, vis, uml_s = self._render_class_instance(
+                        object_implemented, obj_info, static=True)
+                    if uml_s is None:
+                        continue
                 elif obj_type == CodeInspector.FUNCTION or obj_type == CodeInspector.METHOD:
                     uml_type, vis, uml_s = self._render_function(
                         obj_info, static=True)
@@ -1488,12 +1581,8 @@ class PlantUMLRenderer():
                     uml_type, vis, uml_s = self._render_primitive(
                         object_implemented, obj_info, static=True)
                     pass
-                elif obj_type == CodeInspector.CLASS_INSTANCE:
-                    uml_type, vis, uml_s = self._render_class_instance(
-                        object_implemented, obj_info, static=True)
-                    if uml_s is None:
-                        continue
-                uml_rendered_module[uml_type][vis][object_implemented] = {CodeInspector.HASH: hash,
+
+                uml_rendered_module[uml_type][vis][object_implemented] = {CodeInspector.HASH: hash_value,
                                                                           PlantUMLRenderer.PLANTUML: uml_s,
                                                                           CodeInspector.OBJECT: obj_info}
             # Get Relations for IMPORTED CODE ELEMENTS
@@ -1502,9 +1591,9 @@ class PlantUMLRenderer():
             for object_imported, obj_info in objects_imported.items():
                 logger.debug(
                     f"Imported class {object_implemented}, get relations")
-                hash = obj_info.get(CodeInspector.HASH)
-                if hash:
-                    objects_dict[hash] = obj_info
+                hash_value = obj_info.get(CodeInspector.HASH)
+                if hash_value:
+                    objects_dict[hash_value] = obj_info
                 rel = PlantUMLRenderer._create_module_obj_relation(
                     module_info, obj_info, relation=CodeInspector.RELATION_IMPORTS)
                 if rel:
@@ -1513,9 +1602,15 @@ class PlantUMLRenderer():
             # get the plantuml string for the module (without the classes)
             _ = self._render_module(uml_rendered_module)
             rendererd_modules[module] = uml_rendered_module
+
         # render associated objects like imports
         related_objects = PlantUMLRenderer._create_relation_objects(
             uml_relation_list, objects_dict, rendererd_modules)
+
+        # check relations
+        uml_relation_list.extend(uml_superclass_relations)
+        uml_relation_list = PlantUMLRenderer._validate_relations(uml_relation_list,objects_dict)
+
         return (rendererd_modules, uml_relation_list, related_objects)
 
     def render_component_diagram(self) -> str:
@@ -1615,6 +1710,7 @@ if __name__ == "__main__":
     if True:
         uml_renderer = PlantUMLRenderer(om)
         uml_component_s = uml_renderer.render_component_diagram()
+        # print(uml_component_s)
         plantuml = uml_renderer.render_class_diagram()
         print(plantuml)
         pass
