@@ -7,6 +7,7 @@ from logging import BufferingFormatter
 logger = logging.getLogger(__name__)
 
 my_module_var = "sfsfsffs"
+my_module_dict = {"key":"value"}
 
 def my_function(my_function_param:str)->dict:
     """ returns a dict """
@@ -15,17 +16,19 @@ def my_function(my_function_param:str)->dict:
 class MyClass01():
     """ sample class """
     myclass_class_att1="MyClass01.att11"
-    myclass_dict={}
+    myclass_dict={}    
+    myclass_ref_ext_class = ExternalClass()
 
     def __init__(self):
         self.myclass_att1="<self.myclass_att1>"
         self.myclass_ext_att1=None
         self.get_external()
+        self._my_class_list=list()
         s=f"Constructor MyClass01: self(MyClass01).myclass_att1: { self.myclass_att1}"
         logger.info("s")
         print("s")
 
-    def get_external(self)->str:
+    def get_external(self,aFormatter:BufferingFormatter=None)->str:
         """ gets external class and reads object attribute """
         ext_class = ExternalClass()
         self.myclass_ext_att1 = ext_class.external_instance_method()
@@ -44,7 +47,7 @@ class MyClass01():
         print(s)
         return value
 
-    def myclass_instance_method(self):
+    def myclass_instance_method(self, avar:int)->dict:
         """ an object method returning object value """
         s=f"myclass_method, return attribute self.myclass_att1 {self.myclass_att1}"
         logger.info(s)

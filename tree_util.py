@@ -2,6 +2,8 @@
 
 import logging
 import sys
+import json
+import yaml
 logger = logging.getLogger(__name__)
 
 class Tree():
@@ -127,8 +129,8 @@ class Tree():
 
         return hierarchy_nodes_dict
 
-    def get_children(self,node_id)->list:
-        """ gets children nodes as list"""
+    def get_children(self,node_id,only_leaves=False)->list:
+        """ gets children nodes as list (option to select only leaves) """
         logger.debug("Get Children Nodes")
         children_nodes = []
         parent_node=self._hierarchy_nodes_dict.get(node_id)
@@ -151,6 +153,14 @@ class Tree():
 
         parent_children=parent_node[Tree.CHILDREN]
         get_children_recursive(parent_children)
+
+        if only_leaves:
+            leaves=[]
+            for child in children_nodes:
+                child_info = self._hierarchy_nodes_dict.get(child)
+                if not child_info.get(Tree.CHILDREN):
+                    leaves.append(child)
+            children_nodes=leaves
 
         return children_nodes
 
@@ -190,7 +200,7 @@ class Tree():
             parent_node=self._hierarchy_nodes_dict.get(parent_id)
             siblings=parent_node.get(Tree.CHILDREN)
             siblings=[elem for elem in siblings if not elem==node_id]
-        
+
         if only_leaves:
             siblings=[elem for elem in siblings if is_leaf(elem)]
 
@@ -223,6 +233,63 @@ class Tree():
 
         return leaf_siblings
 
+    def get_nested_tree(self)->dict:
+        """ gets the tree as nested dict """
+        logger.info("Get nested Tree")
+        node_hierarchy = self._hierarchy_nodes_dict
+        # current_nodes = [self.root_id]
+        nested_tree={self.root_id:{}}
+
+        def get_next_nodes_recursive(nodes:dict):
+            if nodes:
+                for node,node_children in nodes.items():
+                    children_nodes=node_hierarchy[node][Tree.CHILDREN]
+                    children_dict={}
+                    for children_node in children_nodes:
+                        children_dict[children_node]={}
+                    node_children.update(children_dict)
+                    get_next_nodes_recursive(node_children)
+            else:
+                pass
+
+        get_next_nodes_recursive(nested_tree)
+        return nested_tree
+
+    def get_reverse_tree_elemsents(self)->dict:
+        """ gets the elements dict of nested tree elements """
+        logger.info("Get reverse nested Tree")
+        nested_tree = self.get_nested_tree()
+        root_key=list(nested_tree.keys())[0]
+        reverse_tree={root_key:nested_tree[root_key]}
+
+        def get_next_nodes_recursive(nodes:dict)->dict:
+            if nodes:
+                next_nodes={}
+                for node,node_info in nodes.items():
+                    reverse_tree[node]=node_info
+                    next_nodes.update(node_info)
+                get_next_nodes_recursive(next_nodes)
+            else:
+                pass
+
+        get_next_nodes_recursive(reverse_tree)
+        return reverse_tree
+
+    def json(self)->str:
+        """ returns json string """
+        logger.debug("json()")
+        nested_tree=self.get_nested_tree()
+        return json.dumps(nested_tree,indent=3)
+    
+    def yaml(self)->str:
+        """ returns yaml string """
+        logger.debug("yaml()")
+        nested_tree=self.get_nested_tree()
+        return yaml.dump(nested_tree)
+
+    def __str__(self)->str:
+        return self.json()            
+
 if __name__ == "__main__":
     loglevel=logging.DEBUG
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
@@ -245,9 +312,19 @@ if __name__ == "__main__":
     my_hierarchy=my_tree.hierarchy
     my_levels=my_tree.max_level
 
-    children=my_tree.get_children(1)
+    children=my_tree.get_children(1,only_leaves=False)
+    print(children)
     my_parents=my_tree.get_predecessors(8)
     my_siblings=my_tree.get_siblings(8)
     my_leaves=my_tree.get_leaves()
-    my_leave_siblings=my_tree.get_leave_siblings()
+    my_leave_siblings=my_tree.get_leaf_siblings()
+    my_nested_tree=my_tree.get_nested_tree()
+    my_reverse_tree=my_tree.get_reverse_tree_elemsents()
+    # display tree as json
+    #print("TREE AS JSON")
+    #print(json.dumps(my_nested_tree,indent=3))
+    #print("TREE AS YAML")
+    #print(yaml.dump(my_nested_tree))
+    print(str(my_tree))
+    print(my_tree.yaml())
     pass
