@@ -1666,27 +1666,24 @@ if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
                         level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
     om = ObjectModelGenerator()
+    # this will load the sample modules in this path
     root_path = Path(__file__).parent
-
-    # try:
-    #     om2 = ObjectModel("ddd")
-    # except TypeError as e:
-    #     logger.info("couldn't instanciate Object")
 
     # Testing inspect of a module
     if False:
         module_model = ObjectModelGenerator.create_model_from_module(
             module_myclass)
 
+    # testing generation of class module 
     if False:
         class_model = ObjectModelGenerator.create_model_from_class(MyClass01)
 
+    # testing generation of a single class model 
     if False:
         myclass01 = MyClass01()
         myclass_instance_info = CodeInspector().inspect_object(myclass01)
         myclass_info = CodeInspector().inspect_object(MyClass01)
         my_module_info = CodeInspector().inspect_object(module_myclass)
-
         ObjectModelGenerator.create_model_from_class(myclass01)
 
     # testing class metadata
@@ -1695,30 +1692,18 @@ if __name__ == "__main__":
         class_meta_dict = CodeInspector.get_meta_dict(myclass_info)
 
     if False:
-        s = hashlib.md5("xxxx".encode()).hexdigest()
-        pass
-
-    # root path
-    if False:
         # load the modules in my_package
         model_modules = ObjectModelGenerator.create_model_from_path(root_path)
 
+    # all in one go: create the module 
     if True:
-        om = object_modekl = ObjectModel(root_path)
+        om = ObjectModel(root_path)
         module_tree = om.module_tree
 
+    # render the model as plantuml: simple package diagram and class diagram 
     if True:
         uml_renderer = PlantUMLRenderer(om)
         uml_component_s = uml_renderer.render_component_diagram()
         # print(uml_component_s)
         plantuml = uml_renderer.render_class_diagram()
         print(plantuml)
-        pass
-
-
-    # TODO get superclass location of a method
-    #mysubclass_obj = MySubClass()
-    #info_mysubclass_obj = CodeInspector().inspect_object(mysubclass_obj)
-    #meta_dict = CodeInspector.get_meta_dict(info_mysubclass_obj)
-
-    pass
