@@ -612,7 +612,7 @@ class ObjectModelGenerator():
         pass
 
     @staticmethod
-    def create_model_from_module(module):
+    def create_model_from_module(module,model_instance:bool=False):
         """ creates model dict for modules"""
 
         def get_class_data(member_info):
@@ -623,11 +623,12 @@ class ObjectModelGenerator():
                 return class_data
             objref = member_info.get(CodeInspector.ATTRIBUTE_OBJREF)
             # try to get object instance
-            try:
-                obj_instance = objref()
-                objref = obj_instance
-            except TypeError as e:
-                logger.info(f"couldn't instanciate Object {objref}")
+            if model_instance:
+                try:
+                    obj_instance = objref()
+                    objref = obj_instance
+                except TypeError as e:
+                    logger.info(f"couldn't instanciate Object {objref}")
             class_data = ObjectModelGenerator.create_model_from_class(objref)
             return class_data
 
@@ -774,7 +775,7 @@ class ObjectModelGenerator():
         return out_dict
 
     @staticmethod
-    def create_model_from_path(p):
+    def create_model_from_path(p,model_instance:bool=False):
         """ creates dict of modules / classes from a given file path """
         if not os.path.isdir(p):
             logger.warning(f"{p} is not a valid path")
@@ -785,7 +786,7 @@ class ObjectModelGenerator():
         out_module_model = {}
         for module_name, module_info in module_dict.items():
             logger.info(f"get model information for module {module_name}")
-            model = ObjectModelGenerator.create_model_from_module(module_info)
+            model = ObjectModelGenerator.create_model_from_module(module_info,model_instance)
             out_module_model[module_name] = model
             pass
         return out_module_model
@@ -801,9 +802,10 @@ class ObjectModel():
     PARENT = "PARENT"
     TYPE = "TYPE"
 
-    def __init__(self, p: str) -> None:
+    def __init__(self, p: str,model_instance:bool=False) -> None:
         """ right now model is created from path """
-        self._module_model = ObjectModelGenerator.create_model_from_path(p)
+        self._model_instance=model_instance
+        self._module_model = ObjectModelGenerator.create_model_from_path(p,model_instance)
         self._module_tree = {}
         self._create_package_hierarchy()
 
@@ -872,6 +874,10 @@ class PlantUMLRenderer():
     # setting namespaceSeparator disables auztomatic creation of packages
     # DOC_UML = "@startuml\nset namespaceSeparator none\n_CONTENT_\n@enduml"
     DOC_UML ="\n".join(["@startuml",
+                "'remark use together {...}"
+                "left to right direction",
+                "'top to bottom direction",
+                "skinparam dpi 180",
                 "set namespaceSeparator none",
                 "skinparam linetype ortho",
                 "'skinparam linetype polyline",
@@ -1437,14 +1443,20 @@ class PlantUMLRenderer():
                             "\n'### RELATIONS":relations_dict}
         for comment,render_object_dict in render_object_dicts.items():
             uml_inner.append(comment)
-            for object, obj_info in render_object_dict.items():
+            uml_block=[]
+            for uml_object, obj_info in render_object_dict.items():
                 uml = obj_info.get(PlantUMLRenderer.PLANTUML)
                 if uml:
-                    logger.debug(f"Object {object}, len {len(uml)} bytes")
-                    uml_inner.append(uml)
+                    logger.debug(f"Object {uml_object}, len {len(uml)} bytes")
+                    uml_block.append(uml)
                 else:
                     logger.warning(
-                        f"No plantuml snippet found for object {object}")
+                        f"No plantuml snippet found for object {uml_object}")
+            
+            # add a together bracket around own modules        
+            if "MODULES" in comment:
+                uml_block = ["together {",*uml_block,"}","' (together ### MODULES)"]
+            uml_inner.extend(uml_block)
         doc_uml = doc_uml.replace(
             PlantUMLRenderer.UML_CONTENT, "\n".join(uml_inner))
         return doc_uml
@@ -1679,6 +1691,10 @@ if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
                         level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
     om = ObjectModelGenerator()
+
+    # Render instanciated objects as well (Constructor is called)
+    model_instance = True
+
     # this will load the sample modules in this path
     root_path = Path(__file__).parent
 
@@ -1706,11 +1722,11 @@ if __name__ == "__main__":
 
     if False:
         # load the modules in my_package
-        model_modules = ObjectModelGenerator.create_model_from_path(root_path)
+        model_modules = ObjectModelGenerator.create_model_from_path(root_path,model_instance)
 
     # all in one go: create the module 
     if True:
-        om = ObjectModel(root_path)
+        om = ObjectModel(root_path,model_instance)
         module_tree = om.module_tree
 
     # render the model as plantuml: simple package diagram and class diagram 
