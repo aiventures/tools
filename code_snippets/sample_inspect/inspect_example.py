@@ -874,7 +874,7 @@ class PlantUMLRenderer():
     # setting namespaceSeparator disables auztomatic creation of packages
     # DOC_UML = "@startuml\nset namespaceSeparator none\n_CONTENT_\n@enduml"
     DOC_UML ="\n".join(["@startuml",
-                "'remark use together {...}"
+                "'remark use together {...}",
                 "left to right direction",
                 "'top to bottom direction",
                 "skinparam dpi 180",
@@ -887,6 +887,7 @@ class PlantUMLRenderer():
                 "_CONTENT_",
                 "hide <<moduleclass>> stereotype",
                 "@enduml"])
+       
     COMPONENT = "_COMPONENT_"
     PACKAGE = "_PACKAGE_"
     PUBLIC = "public"
@@ -1141,7 +1142,8 @@ class PlantUMLRenderer():
 
         for m_name, m_info in methods_dict.items():
             uml = None
-            is_static = m_info.get(CodeInspector.ATTRIBUTE_IS_INSTANCE)
+            # is_static = m_info.get(CodeInspector.ATTRIBUTE_IS_INSTANCE)
+            is_static = not m_info.get(CodeInspector.ATTRIBUTE_IS_INSTANCE,False)
             o_type, o_visibility, uml = self._render_function(
                 m_info, is_static)
             # uml_rendered_module[o_type][o_visibility] = uml
@@ -1157,7 +1159,8 @@ class PlantUMLRenderer():
 
         for v_name, v_info in vars_dict.items():
             v_type = v_info.get(CodeInspector.ATTRIBUTE_OBJECTTYPE)
-            is_static = v_info.get(CodeInspector.ATTRIBUTE_IS_INSTANCE)
+            is_static = not v_info.get(CodeInspector.ATTRIBUTE_IS_INSTANCE,False)
+            # is_static = v_info.get(CodeInspector.ATTRIBUTE_IS_INSTANCE)
             uml = None
             if v_type == CodeInspector.PRIMITIVE:
                 o_type, o_visibility, uml = self._render_primitive(
@@ -1571,11 +1574,8 @@ class PlantUMLRenderer():
             uml_rendered_module[CodeInspector.OBJECT] = module_info.get(
                 CodeInspector.OBJECT)
 
-            # object = module_info.get(CodeInspector.OBJECT)
-            # objects_imported = module_info.get(CodeInspector.RELATION_IMPORTS)
             classes_implemented = module_info.get(
                 CodeInspector.IMPLEMENTED_CLASSES)
-            # classes_imported = module_info.get(CodeInspector.IMPORTED_CLASSES)
 
             # IMPLEMENTED CODE OBJECTS
             objects_implemented = module_info.get(
@@ -1662,12 +1662,12 @@ class PlantUMLRenderer():
             if is_module:
                 # todo split at package
                 name = PlantUMLRenderer._render_module_name(name)
-                name = '['+name+']'
+                name = '    ['+name+']'
                 if hash_value:
-                    name += " as "+hash_value
+                    name += " as "+hash_value+" "+PlantUMLRenderer.COLOR_MODULE
             elif len(name) > 1:
+                # comment = f"\n'### PACKAGE \n"
                 name = 'package "'+name+'" {'
-
             return name
 
         module_tree = self._model.module_tree
@@ -1682,7 +1682,6 @@ class PlantUMLRenderer():
         out = "\n".join(out)
         plantuml_s = PlantUMLRenderer.DOC_UML
         plantuml_s = plantuml_s.replace(PlantUMLRenderer.UML_CONTENT, out)
-        print(plantuml_s)
         return plantuml_s
 
 
@@ -1693,7 +1692,7 @@ if __name__ == "__main__":
     om = ObjectModelGenerator()
 
     # Render instanciated objects as well (Constructor is called)
-    model_instance = True
+    model_instance = False
 
     # this will load the sample modules in this path
     root_path = Path(__file__).parent
@@ -1732,7 +1731,7 @@ if __name__ == "__main__":
     # render the model as plantuml: simple package diagram and class diagram 
     if True:
         uml_renderer = PlantUMLRenderer(om)
-        # uml_component_s = uml_renderer.render_component_diagram()
-        # print(uml_component_s)
+        #uml_component_s = uml_renderer.render_component_diagram()
+        #print(uml_component_s)
         plantuml = uml_renderer.render_class_diagram()
         print(plantuml)

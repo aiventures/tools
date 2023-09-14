@@ -1,7 +1,7 @@
 @startuml
 'remark use together {...}left to right direction
-left to right direction
 'top to bottom direction
+left to right direction
 skinparam dpi 180
 set namespaceSeparator none
 skinparam linetype ortho
@@ -19,6 +19,7 @@ class "my_package.module_external" as e4c16c1e9712dfc1ec759b255265e821 << (M,APP
 }
 ' # CLASS ExternalClass (2833e8af5a195cc59b300bccaacdd18e)
     class "ExternalClass" as 2833e8af5a195cc59b300bccaacdd18e {
+        {field} +external_att1: str
         {field} {static} +externalclass_class_att1: str
         {method} +external_instance_api_method()
         {method} +external_instance_method()
@@ -37,6 +38,8 @@ class "my_package.module_myclass" as 3c547bbf933e560be75f78a175f9dc23 << (M,APPL
 }
 ' # CLASS MyClass01 (6573b34ebd9e018f0eddd2d587978665)
     class "MyClass01" as 6573b34ebd9e018f0eddd2d587978665 {
+        {field} +myclass_att1: str
+        {field} +myclass_ext_att1: str
         {field} {static} +myclass_class_att1: str
         {field} {static} +myclass_dict: dict
         {field} {static} +myclass_ref_ext_class: ExternalClass
@@ -47,14 +50,17 @@ class "my_package.module_myclass" as 3c547bbf933e560be75f78a175f9dc23 << (M,APPL
 }
 ' # CLASS MySubClass (d04a4695b600acce3b4095238365788e)
     class "MySubClass" as d04a4695b600acce3b4095238365788e {
+        {field} +myclass_att1: str
+        {field} +myclass_ext_att1: str
+        {field} +mysublass_att: int
         {field} {static} +myclass_class_att1: str
         {field} {static} +myclass_dict: dict
         {field} {static} +myclass_ref_ext_class: ExternalClass
         {field} {static} +myclass_subclass_att1: str
+        {method} +get_external()
+        {method} +get_external_api()
+        {method} +myclass_instance_method()
         {method} +mysubclass_instance_method()
-        {method} {static} +get_external()
-        {method} {static} +get_external_api()
-        {method} {static} +myclass_instance_method()
         {method} {static} +myclass_method()
         {method} {static} +mysubclass_method(subclass_meth_param:list): str
 }
@@ -69,6 +75,7 @@ class "my_package.my_subpackage.my_submodule" as fa53c87d5669f64cbd78021ded30254
 }
 ' # CLASS MySubModule (924a8b30353d5c3e5017ef5ca880c277)
     class "MySubModule" as 924a8b30353d5c3e5017ef5ca880c277 {
+        {field} +submoduleclassatt: str
         {field} {static} +submoduleclass_class_att1: str
         {method} +submodulemethod(s:str): str
 }
