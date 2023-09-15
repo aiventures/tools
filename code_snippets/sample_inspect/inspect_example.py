@@ -1095,22 +1095,21 @@ class PlantUMLRenderer():
                     PlantUMLRenderer.PROTECTED, PlantUMLRenderer.PRIVATE]
         obj_list = [CodeInspector.ATTRIBUTE, CodeInspector.METHOD]
         uml_out = []
-        for obj in obj_list:
+        for obj_type in obj_list:
             uml_list = []
             for vis in vis_list:
                 try:
-                    uml_dict = uml_rendered_module[obj][vis]
-                    for obj,plantuml in uml_dict.items():
-                        logger.debug(f"[{obj}][{vis}] , plantuml: [{plantuml}]")
+                    uml_dict = uml_rendered_module[obj_type][vis]
+                    for attribute,plantuml in uml_dict.items():
+                        logger.debug(f"<{obj_type}> [{attribute}][{vis}] , plantuml: [{plantuml}]")
                         if not plantuml:
                             continue                        
                         uml_list.append(plantuml)                    
                 except KeyError as e:                
                     # logger.debug(f"No Key ({obj}):[{vis}]{obj}")
                     continue
-                uml_list = sorted(uml_list)
-                uml_out.extend(uml_list)
-        return "\n".join(uml_out)
+                uml_out.extend(uml_list)                    
+        return "\n".join(sorted(list(set(uml_out))))
 
     def _render_class(self, class_info: dict):
         """ renders a class """
@@ -1686,16 +1685,29 @@ class PlantUMLRenderer():
 
 
 if __name__ == "__main__":
-    loglevel = logging.DEBUG
+    loglevel = logging.ERROR
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
                         level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
+    # cwd = os.getcwd()
     om = ObjectModelGenerator()
 
     # Render instanciated objects as well (Constructor is called)
     model_instance = False
 
     # this will load the sample modules in this path
-    root_path = Path(__file__).parent
+    if True:
+        root_path = Path(__file__).parent
+    # load path from input
+    else:
+        args = sys.argv
+        # conventional command, use current directory
+        arg_path = os.getcwd()
+        if len(args) >= 2:
+            arg_path=args[1]
+        if not os.path.isdir(arg_path):
+            print(f"Can't find path {arg_path}, check call of code_inspector")
+            sys.exit(-1)
+        root_path = arg_path
 
     # Testing inspect of a module
     if False:
@@ -1731,7 +1743,29 @@ if __name__ == "__main__":
     # render the model as plantuml: simple package diagram and class diagram 
     if True:
         uml_renderer = PlantUMLRenderer(om)
-        #uml_component_s = uml_renderer.render_component_diagram()
+        uml_component_s = uml_renderer.render_component_diagram()
         #print(uml_component_s)
-        plantuml = uml_renderer.render_class_diagram()
-        print(plantuml)
+        uml_class_s = uml_renderer.render_class_diagram()
+        # print(plantuml)
+    
+    # print the files
+    if True:
+        print("###### PLANTUML CLASS DIAGRAM")
+        print(uml_class_s)
+        print("###### PLANTUML COMPONENT DIAGRAM")
+        print(uml_component_s)    
+    
+    # save the files in current location
+    if True:
+        print(f"Save Files uml_component.plantuml, uml_class.plantuml ({os.getcwd()})")
+        f=os.path.join("uml_component.plantuml")
+        fm.save_txt_file(f,uml_component_s)
+        f=os.path.join("uml_class.plantuml")
+        fm.save_txt_file(f,uml_class_s)
+        # set windows path to a folder containing all bat files        
+        os.system("call plantuml.bat")
+        os.system("start uml_component.png")
+        os.system("start uml_class.png")
+        os.system("call tc.bat")
+        print("##### IMAGE FILES")
+        os.system("dir /b *.png")

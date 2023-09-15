@@ -22,13 +22,13 @@ class MyClass01():
     def __init__(self):
         self.myclass_att1="<self.myclass_att1>"
         self.myclass_ext_att1=None
-        self.get_external()
+        self._get_external()
         self._my_class_list=list()
         s=f"Constructor MyClass01: self(MyClass01).myclass_att1: { self.myclass_att1}"
         logger.info("s")
         print("s")
 
-    def get_external(self,aFormatter:BufferingFormatter=None)->str:
+    def _get_external(self,aFormatter:BufferingFormatter=None)->str:
         """ gets external class and reads object attribute """
         ext_class = ExternalClass()
         self.myclass_ext_att1 = ext_class.external_instance_method()
