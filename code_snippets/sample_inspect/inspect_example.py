@@ -18,7 +18,7 @@ from my_package.module_myclass import MyClass01
 from my_package.module_myclass import MySubClass
 from tools.tree_util import Tree
 from tools import file_module as fm
-
+from datetime import datetime as DateTime
 
 logger = logging.getLogger(__name__)
 
@@ -804,6 +804,7 @@ class ObjectModel():
 
     def __init__(self, p: str,model_instance:bool=False) -> None:
         """ right now model is created from path """
+        self._path=p
         self._model_instance=model_instance
         self._module_model = ObjectModelGenerator.create_model_from_path(p,model_instance)
         self._module_tree = {}
@@ -886,7 +887,7 @@ class PlantUMLRenderer():
                 "</style>",
                 "_CONTENT_",
                 "hide <<moduleclass>> stereotype",
-                "left footer Generated with CodeInspector",
+                "left footer Generated with CodeInspector on (_CREATED_) from (_SOURCE_)",
                 "@enduml"])
        
     COMPONENT = "_COMPONENT_"
@@ -912,6 +913,8 @@ class PlantUMLRenderer():
 
     def __init__(self, model: ObjectModel) -> None:
         self._model = model
+        self._path = model._path
+
 
     @staticmethod
     def _get_string_from_list(string_list: list, indent: int = 4) -> str:
@@ -1433,10 +1436,19 @@ class PlantUMLRenderer():
             comment=f"'# RELATION ({i}) [{src_obj}-{relation_s}-{trg_obj}]: {src_key} - {trg_key} \n"
             relations_out[plantuml]={PlantUMLRenderer.PLANTUML:(comment+plantuml)}
         return relations_out
+    
+    def _render_footer(self,plantuml_s:str)->str:
+        """ renders the footer info """
+        date_s=DateTime.now().strftime("%Y-%m-%d %H:%M:%S")
+        path=str(self._path).replace("\\","/")
+        plantuml_s = plantuml_s.replace("_CREATED_",date_s)
+        plantuml_s = plantuml_s.replace("_SOURCE_",str(path))
+        return plantuml_s
 
     def render_class_diagram(self) -> str:
         """ renders all plantuml items """
         doc_uml = PlantUMLRenderer.DOC_UML
+        doc_uml = self._render_footer(doc_uml)
         uml_inner = []
         modules, relations, related_objects = self._collect_render_objects()
         relations_dict=PlantUMLRenderer._render_relations(relations)
@@ -1681,6 +1693,8 @@ class PlantUMLRenderer():
         out = [get_plantuml(s) for s in string_list]
         out = "\n".join(out)
         plantuml_s = PlantUMLRenderer.DOC_UML
+        # render footer 
+        plantuml_s = self._render_footer(plantuml_s)
         plantuml_s = plantuml_s.replace(PlantUMLRenderer.UML_CONTENT, out)
         return plantuml_s
 
