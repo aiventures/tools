@@ -30,14 +30,14 @@ displayfunctions_dict={"url":"get_url_from_link",
                       }
 exif_info={}
 
-def read_txt_file(filepath,encoding='utf-8',comment_marker="#"):
+def read_txt_file(filepath,encoding='utf-8',comment_marker="#",skip_blank_lines=True):
     """ reads data as lines from file
     """
     lines = []
     try:
         with open(filepath,encoding=encoding,errors='backslashreplace') as fp:
             for line in fp:
-                if len(line.strip())==0:
+                if len(line.strip())==0 and skip_blank_lines:
                     continue
                 if line[0]==comment_marker:
                     continue
