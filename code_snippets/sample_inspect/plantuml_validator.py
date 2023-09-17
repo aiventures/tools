@@ -1,4 +1,4 @@
-""" testing the inspect module """
+""" Verify the relations and automatically comment them if necessary """
 from inspect import Attribute
 import copy
 import os
@@ -9,8 +9,7 @@ import json
 import logging
 from pathlib import Path
 from tools import file_module as fm
-
-
+from datetime import datetime as DateTime
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +243,7 @@ class PlantUmlValidator():
             stats_dict[obj]=len(obj_list)
         stats_dict.update({"LINES_TOTAL":n_total,"LINES_CONTENT":n_content,"LINES:COMMENT":n_comments,
                              "GUIDS":n_guids,"GUID_RELATIONS":n_relations,"GUID_NO_REFS":n_no_refs})
-        stats_out={"FILE":self._file,"OBJECTS":objects_dict,"GUIDS":guid_infos,"STATS":stats_dict}
+        stats_out={"FILE":self._file,"DATE":DateTime.now().strftime("%Y-%m-%d %H:%M:%S"),"OBJECTS":objects_dict,"GUIDS":guid_infos,"STATS":stats_dict}
         if show:
             print(json.dumps(stats_out,indent=4))
         if save:
@@ -259,7 +258,7 @@ class PlantUmlValidator():
             print("No stats file was saved")
 
 if __name__ == "__main__":
-    loglevel = logging.DEBUG
+    loglevel = logging.ERROR
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
                         level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
     
@@ -276,7 +275,7 @@ if __name__ == "__main__":
     
     # get stats
     if True:
-        stats_dict = plantUmlValidator.get_stats(show=True,save=False)
+        stats_dict = plantUmlValidator.get_stats(show=True,save=True)
         # plantUmlValidator.open_stats()
         
 
