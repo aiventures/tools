@@ -886,6 +886,7 @@ class PlantUMLRenderer():
                 "</style>",
                 "_CONTENT_",
                 "hide <<moduleclass>> stereotype",
+                "left footer Generated with CodeInspector",
                 "@enduml"])
        
     COMPONENT = "_COMPONENT_"
