@@ -1,4 +1,4 @@
-""" testing the inspect module """
+""" code inspector generate uml """
 
 import inspect
 import hashlib
@@ -1895,11 +1895,11 @@ if __name__ == "__main__":
         model_modules = ObjectModelGenerator.create_model_from_path(root_path,model_instance)
 
     # all in one go: create the module
-    if True:
+    if False:
         om = ObjectModel(root_path,model_instance)
         module_tree = om.module_tree
 
-    if True:
+    if False:
         model_filter = [ModelFilter.FILTER_INNER]
         model_filter = [ModelFilter.FILTER_INTERNAL]
         model_filter = [ModelFilter.FILTER_SYS_MODULE]
@@ -1907,28 +1907,28 @@ if __name__ == "__main__":
         model_filter = None
 
     # render the model as plantuml: simple package diagram and class diagram
-    if True:
+    if False:
         uml_renderer = PlantUMLRenderer(om)
-        uml_renderer.add_model_filter(model_filter)
+        # uml_renderer.add_model_filter(model_filter)
         uml_component_s = uml_renderer.render_component_diagram()
         #print(uml_component_s)
         uml_class_s = uml_renderer.render_class_diagram()
         # print(plantuml)
 
     # print the files
-    if True:
+    if False:
         print("###### PLANTUML CLASS DIAGRAM")
-        print(uml_class_s)
+        # print(uml_class_s)
         print("###### PLANTUML COMPONENT DIAGRAM")
         # print(uml_component_s)
 
     # save the files in current location
-    if True:
+    if False:
         print(f"Save Files uml_component.plantuml, uml_class.plantuml ({os.getcwd()})")
         f=os.path.join("uml_component.plantuml")
-        fm.save_txt_file(f,uml_component_s)
+        # fm.save_txt_file(f,uml_component_s)
         f=os.path.join("uml_class.plantuml")
-        fm.save_txt_file(f,uml_class_s)
+        # fm.save_txt_file(f,uml_class_s)
         # set windows path to a folder containing all bat files
         os.system("call plantuml.bat")
         os.system("start uml_component.png")
@@ -1936,3 +1936,6 @@ if __name__ == "__main__":
         os.system("call tc.bat")
         print("##### IMAGE FILES")
         os.system("dir /b *.png")
+    
+    # use the cmd_code_inspector to run the program the aboce stuff is meant to showcase methods / testing
+    pass

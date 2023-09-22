@@ -1,5 +1,6 @@
 @echo off
 rem define the file locations and rename the file to set_env_local.bat
+rem ensure that the files are accessible from the Path 
 rem code inspector python
 set code_inspector=C:\<path to>\inspect_example.py
 rem path to plantuml
