@@ -132,8 +132,6 @@ def run(args_dict):
         logger.info(f"{p} is not a valid path")
         sys.exit()
 
-    test_model = True
-
     # this will load the sample modules in this path
     if test_model:
         root_path = Path(__file__).parent
@@ -181,6 +179,7 @@ def run(args_dict):
     print("##### Execution Summary")
     print(f"      Model source: {str(root_path)=}, {test_model=}")
     print(f"      Model types: {component_diagram=}, {class_diagram=}")
+    print(f"      Model filters: {validated_model_filter}")
     print(f"      Generate Images: {plant_uml=}, {open_images=}")
     print(f"      Open Total Commander: {total_commander=}")
     print(f"      LOG LEVEL ({log_level})")
