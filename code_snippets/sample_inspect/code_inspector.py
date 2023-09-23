@@ -2,7 +2,6 @@
 
 import inspect
 import hashlib
-
 # sys.path sys.modules
 import copy
 import os
@@ -11,9 +10,7 @@ import sys
 import logging
 from pathlib import Path
 from datetime import datetime as DateTime
-
 from module_loader import ModuleLoader
-
 from my_package import module_myclass
 from my_package.module_myclass import MyClass01
 # from my_package import module_external
@@ -1902,7 +1899,7 @@ if __name__ == "__main__":
     if False:
         model_filter = [ModelFilter.FILTER_INNER]
         model_filter = [ModelFilter.FILTER_INTERNAL]
-        model_filter = [ModelFilter.FILTER_SYS_MODULE]
+        model_filter = [ModelFilter.FILTER_SYS_MODULEe]
         model_filter = [ModelFilter.FILTER_SYS_MODULE,ModelFilter.FILTER_INNER]
         model_filter = None
 
