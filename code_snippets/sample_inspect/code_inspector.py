@@ -17,7 +17,7 @@ from my_package.module_myclass import MyClass01
 # from sample_inspect.module_loader import ModuleLoader
 # from my_package.module_myclass import MySubClass
 from tools.tree_util import Tree
-from tools import file_module as fm
+# from tools import file_module as fm
 
 
 logger = logging.getLogger(__name__)
@@ -196,7 +196,7 @@ class CodeInspector():
             is_subpath.append(python_syspath ==
                               p or p.startswith(python_syspath+os.sep))
         return any(is_subpath)
-    
+
     @staticmethod
     def is_sys_module(module):
         """ check """
@@ -230,7 +230,6 @@ class CodeInspector():
     @staticmethod
     def get_object_attributes(obj):
         """ Gets the attributes for an object """
-        # TODO check whether it is instanciated is class
         object_props = {}
         object_type = CodeInspector.get_type(obj)
 
@@ -268,7 +267,7 @@ class CodeInspector():
                 signature_dict[param] = value.__name__
             object_props[CodeInspector.ATTRIBUTE_SIGNATURE] = signature_dict
         except AttributeError:
-            logger.warning(
+            logger.debug(
                 f"couldn't get annotations for object {object_props.get(CodeInspector.__new__)}")
 
         # construct a key:
@@ -327,21 +326,21 @@ class CodeInspector():
         object_props = CodeInspector.get_object_attributes(obj)
 
         # create an obbject key separate by colons
-        module = object_props.get(CodeInspector.ATTRIBUTE__MODULE__)
+        # module = object_props.get(CodeInspector.ATTRIBUTE__MODULE__)
         objtype = object_props.get(CodeInspector.ATTRIBUTE_OBJECTTYPE)
         key = object_props.get(CodeInspector.KEY)
 
         if objtype == CodeInspector.CLASS_INSTANCE:
             instance_variables = vars(obj)
-        elif objtype == CodeInspector.MODULE:
-            module = CodeInspector.MODULE
+        # elif objtype == CodeInspector.MODULE:
+        #    module = CodeInspector.MODULE
         else:
             instance_variables = []
 
-        try:
-            name = key[CodeInspector.ATTRIBUTE__NAME__]
-        except Exception as e:
-            name = objtype
+        # try:
+        #     name = key[CodeInspector.ATTRIBUTE__NAME__]
+        # except Exception as e:
+        #     name = objtype
 
         members_dict = {}
         members_list = inspect.getmembers(obj)
@@ -375,7 +374,7 @@ class CodeInspector():
                     except Exception:
                         is_instance = None
 
-                        logger.warning(
+                        logger.debug(
                             f"Couldn't find method {member_name} in Class Definition")
                 # when class is parsed, instance variables are absent
                 else:
@@ -405,20 +404,20 @@ class CodeInspector():
         module_name = module_object.get(CodeInspector.ATTRIBUTE__NAME__)
         logger.info(f"Get Classes from module {module_name}")
 
-        class_infos_dict = {CodeInspector.INSTANCE: {},
-                            CodeInspector.CLASS: {}}
+        # class_infos_dict = {CodeInspector.INSTANCE: {},
+        #                    CodeInspector.CLASS: {}}
         members_dict = module_info.get(CodeInspector.MEMBERS)
         class_types = [CodeInspector.CLASS, CodeInspector.CLASS_INSTANCE]
         for member_name, member_dict in members_dict.items():
             object_type = member_dict.get(CodeInspector.ATTRIBUTE_OBJECTTYPE)
             if not object_type in class_types:
                 continue
-            object = member_dict.get(CodeInspector.ATTRIBUTE_OBJREF)
+            member_object = member_dict.get(CodeInspector.ATTRIBUTE_OBJREF)
             # try to instanciate to class instance to get instance attributes
-            info_class_instance = None
+            # info_class_instance = None
             # check class
             if object_type == CodeInspector.CLASS:
-                object_class = object
+                object_class = member_object
                 try:
                     logger.debug(
                         f"Get object instance for Class {member_name}")
@@ -662,7 +661,6 @@ class ObjectModelGenerator():
             logger.warning(f"Object is of type {obj_type}, not module")
             return None
         out_dict[CodeInspector.KEY] = module_key
-        # TODO
         out_dict[CodeInspector.HASH] = module_hash
         out_dict[CodeInspector.ATTRIBUTE_NAME] = module_object[CodeInspector.ATTRIBUTE_NAME]
         out_dict[CodeInspector.ATTRIBUTE_PACKAGE] = module_object[CodeInspector.ATTRIBUTE_PACKAGE]
@@ -698,7 +696,7 @@ class ObjectModelGenerator():
         return out_dict
 
     @staticmethod
-    def create_model_from_class(cls):
+    def create_model_from_class(obj_class):
         """ creates model dict for class"""
         methods = [CodeInspector.METHOD, CodeInspector.FUNCTION]
 
@@ -708,7 +706,7 @@ class ObjectModelGenerator():
         class_methods_dict = {}
         class_variables_dict = {}
 
-        myclass_info = CodeInspector().inspect_object(cls)
+        myclass_info = CodeInspector().inspect_object(obj_class)
         class_meta_dict = CodeInspector.get_meta_dict(myclass_info)
         class_key = class_meta_dict.get(CodeInspector.KEY)
         class_object = class_meta_dict.get(CodeInspector.OBJECT)
@@ -919,7 +917,7 @@ class ModelFilter(): #0918
             else:
                 logger.warning(f"Filter {obj_filter} not supported")
 
-    def _pass_class_member_filter(self,filter_name,filter_value)->bool:
+    def _pass_class_member_filter(self,filter_name)->bool:
         """ check for class attributes to be filtered """
         passed = True
         name = self._obj_dict.get(CodeInspector.ATTRIBUTE_NAME)
@@ -930,7 +928,7 @@ class ModelFilter(): #0918
         elif filter_name == ModelFilter.FILTER_INNER:
             passed = False # filter away all inner attributes
         return passed
-    
+
     def _filter_sys_module(self):
         """ try to get sysmodule if not present """
         passed = True
@@ -939,14 +937,14 @@ class ModelFilter(): #0918
         module = self._obj_dict.get(CodeInspector.ATTRIBUTE_MODULE)
         if not package:
             package = module
-        if is_sys_module == None and not package is None:
+        if is_sys_module is None and not package is None:
             # try to get sysmodule information from package
-            is_sys_module=CodeInspector.is_sys_module(package)            
-        passed = not is_sys_module            
+            is_sys_module=CodeInspector.is_sys_module(package)
+        passed = not is_sys_module
         return passed
 
 
-    def _pass_object_filter(self,filter_name,filter_value)->bool:
+    def _pass_object_filter(self,filter_name)->bool:
         """ generic filter  """
         passed = True
         # filtering out system module
@@ -973,16 +971,16 @@ class ModelFilter(): #0918
         is_passed = True
         logger.debug(f"Filter object <{obj_name}> ({self._obj_dict[CodeInspector.ATTRIBUTE_OBJECTTYPE]})")
 
-        for filter_name,filter_value in self._filter_dict.items():            
+        for filter_name,filter_value in self._filter_dict.items():
 
             # check for object attributes
             if class_member:
-                is_passed = self._pass_class_member_filter(filter_name,filter_value)
+                is_passed = self._pass_class_member_filter(filter_name)
             # apply other filters
             else:
-                is_passed = self._pass_object_filter(filter_name,filter_value)            
+                is_passed = self._pass_object_filter(filter_name)
             if not is_passed:
-                break            
+                break
             logger.debug(f"Apply filter [{filter_name}], passed: {is_passed}")
 
         self._obj_dict = {}
@@ -1035,9 +1033,9 @@ class PlantUMLRenderer():
     def __init__(self, model: ObjectModel) -> None:
         self._model = model
         self._path = model._path
-        self._model_filter = ModelFilter() 
+        self._model_filter = ModelFilter()
 
-    def add_model_filter(self,filter_list:list=None)->None: 
+    def add_model_filter(self,filter_list:list=None)->None:
         """ add filter names (applicable vslues defined in Model Filter) """
         self._model_filter.add_filters(filter_list)
 
@@ -1136,7 +1134,6 @@ class PlantUMLRenderer():
                 f"Attribute {name}, module {module}, class {class_name} is of same origin, will be skipped")
             return (CodeInspector.ATTRIBUTE, vis, None)
 
-        # TODO FILTER OUT ITEMS
         passed = self._model_filter.passed(name,class_member=False,**obj_info)
         if not passed:
             return (None,None,None)
@@ -1167,7 +1164,7 @@ class PlantUMLRenderer():
                         plantuml_s = attribute_info[PlantUMLRenderer.PLANTUML]
                         logger.debug(f"PlantUML: {plantuml_s}")
                         out_list.append(plantuml_s)
-                    except KeyError as e:
+                    except KeyError:
                         logger.info(
                             f"Couldn't find plantuml for attribute {attribute}, {vis} object part {object_part} ")
                         continue
@@ -1208,7 +1205,7 @@ class PlantUMLRenderer():
                     continue
                 uml_classes.append(uml)
                 uml_links.append(uml_linksym.join([clsmoduleid,class_hash]))
-        except KeyError as e:
+        except KeyError:
             logger.warning(f"couldn't get class from {params['_module_']}")
         params["_uml_inner_"] = "\n".join(uml_classes)
         uml = uml_module
@@ -1237,7 +1234,7 @@ class PlantUMLRenderer():
                         if not plantuml:
                             continue
                         uml_list.append(plantuml)
-                except KeyError as e:
+                except KeyError:
                     continue
                 uml_out.extend(uml_list)
         return "\n".join(sorted(list(set(uml_out))))
@@ -1449,7 +1446,7 @@ class PlantUMLRenderer():
 
         return uml_modules
 
-    def _create_relation_objects(self,uml_relation_list: list, objects_dict: dict, rendered_modules_dict: dict):
+    def _create_relation_objects(self,uml_relation_list: list, rendered_modules_dict: dict):
         """ create relation objects of imports, updates uml relations """
         logger.debug("start, get module import relations")
 
@@ -1458,16 +1455,15 @@ class PlantUMLRenderer():
         # collect existing modules that are already rendered
         rendered_modules = list(rendered_modules_dict.keys())
 
-        object_hash_list = list(objects_dict.keys())
+        # object_hash_list = list(objects_dict.keys())
 
         # check for any missing modeled plantuml
         for uml_relation in uml_relation_list:
-            nodes = [uml_relation.get(CodeInspector.NODE_SOURCE), 
+            nodes = [uml_relation.get(CodeInspector.NODE_SOURCE),
                      uml_relation.get(CodeInspector.NODE_TARGET)]
-            # TODO filter relations            
-            passed_source = self._model_filter.passed(CodeInspector.NODE_SOURCE,nodes[0])
-            passed_target = self._model_filter.passed(CodeInspector.NODE_TARGET,nodes[1])
-            
+            # passed_source = self._model_filter.passed(CodeInspector.NODE_SOURCE,nodes[0])
+            # passed_target = self._model_filter.passed(CodeInspector.NODE_TARGET,nodes[1])
+
             logger.debug(
                 f"Process relation [{uml_relation[PlantUMLRenderer.PLANTUML]}]")
             for node in nodes:
@@ -1693,7 +1689,7 @@ class PlantUMLRenderer():
         """ central method to collect renderings of modules, functions, vars, classes relations """
 
         # classes rendered as plantuml
-        uml_class_list = []
+        # uml_class_list = []
         # relations collected
         uml_relation_list = []
         # objects table all objects collected with their hash values
@@ -1763,7 +1759,6 @@ class PlantUMLRenderer():
             objects_imported = module_info.get(CodeInspector.RELATION_IMPORTS)
             # here the import is class / probably we should calculate hash based on class name
             for object_imported, obj_info in objects_imported.items():
-                # TODO FILTER OUT ITEMS _collect_render_objects
                 passed = self._model_filter.passed(object_imported,**obj_info)
                 if not passed:
                     continue
@@ -1782,8 +1777,7 @@ class PlantUMLRenderer():
             rendererd_modules[module] = uml_rendered_module
 
         # render associated objects like imports
-        related_objects = self._create_relation_objects(
-            uml_relation_list, objects_dict, rendererd_modules)
+        related_objects = self._create_relation_objects(uml_relation_list, rendererd_modules)
 
         # check relations
         uml_relation_list.extend(uml_superclass_relations)
@@ -1813,7 +1807,7 @@ class PlantUMLRenderer():
             name = name.replace("root.", "")
 
             if is_module:
-                # TODO split at package
+                # TODO split at package for a better naming
                 name = PlantUMLRenderer._render_module_name(name)
                 name = '    ['+name+']'
                 if hash_value:
@@ -1933,6 +1927,5 @@ if __name__ == "__main__":
         os.system("call tc.bat")
         print("##### IMAGE FILES")
         os.system("dir /b *.png")
-    
+
     # use the cmd_code_inspector to run the program the aboce stuff is meant to showcase methods / testing
-    pass

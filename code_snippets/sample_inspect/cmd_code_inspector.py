@@ -6,7 +6,7 @@ from pathlib import Path
 import os
 import logging
 from enum import Enum
-from code_inspector import ObjectModelGenerator
+# from code_inspector import ObjectModelGenerator
 from code_inspector import ModelFilter
 from code_inspector import ObjectModel
 from code_inspector import PlantUMLRenderer
@@ -49,6 +49,18 @@ class Config(Enum):
                 "no_images":False,          # OPen images with viewer, default active
                }
 
+    HELP = { "path":"model path [.] (=current path)",
+             "loglevel":"log level [None=INFO,DEBUG,WARN,ERROR] [None]",
+             "filter":"Filter Values _FILTERLIST_, see -h option [None]",
+             "test":"Test Mode, create test model from /my_package [False]",
+             "component_diagram":"Create UML Component Diagram [False]",
+             "model_instance":"Instanciate UML Classes, create UML [False]",
+             "no_class_diagram":"If True, do NOT create UML class diagram [False]",
+             "no_plant_uml":"If True, do not create images with Plantuml [False]",
+             "no_total_commander":"If True, do not open Total Commander [False]",
+             "no_images":"If True, do not open images using Default image viewer  [False]",
+            }
+
     # Configure render all models
     ALL_MODELS = { "component_diagram":True,
                    "no_class_diagram":False, }
@@ -78,26 +90,61 @@ class Config(Enum):
         return out_dict
 
     @staticmethod
-    def add_filter(out_dict,filter:str):
+    def add_filter(out_dict,obj_filter:str):
         """ add filter to configuration """
         try:
-            filter = Config[filter.upper()].value
+            obj_filter = Config[obj_filter.upper()].value
         except:
-            logger.error(f"Filter {filter} unknown check settings")
+            logger.error(f"Filter {obj_filter} unknown check settings")
             return
         filter_list = out_dict.get("filter")
         if filter_list is None:
             filter_list = []
-        if not filter in filter_list:
-            filter_list.append(filter)
+        if not obj_filter in filter_list:
+            filter_list.append(obj_filter)
             out_dict["filter"]=filter_list
         return out_dict
+
+    @staticmethod
+    def get_filters():
+        """ returns all available filters """
+        filter_list=[]
+        for item in Config:
+            name = item.name
+            if name.startswith("FILTER"):
+                if name.endswith("HELP"):
+                    continue
+                filter_list.append(item.value)
+        logger.debug(f"Code Inspector Filter List {filter_list}")
+        return filter_list
+
+    @staticmethod
+    def show_info()->None:
+        """ returns an info string on configuration """
+        filter_list = str(Config.get_filters())
+        s_out = ["### HELP INFO ON PARAMETERS (USE -h option to display short help)",
+                 "    - For windows, use the Batch scripts in /bat/ folder and adapt/rename /bat/set_env_template.bat ",
+                 "    - If batch files in Path, use code_inspector [options]",
+                 "### INPUT PARAMS (as supplied by command line parameters) [DEFAULT VALUE]"]
+        for k,v in Config.HELP.value.items():
+            p = f"[{k}]"
+            s = f"{p:22}: {v}"
+            # special case: use updated filter list
+            s = s.replace("_FILTERLIST_",filter_list)
+            s_out.append(s)
+        print("\n".join(s_out))
 
 def run(args_dict):
     """ running the uml model generator """
     logger.debug("start")
 
     cwd = os.getcwd()
+
+    # show information
+    if args_dict.get("info",False) is True:
+        Config.show_info()
+        return
+
 
     # set predefined configurations
     if args_dict.get("config_all"):
@@ -140,9 +187,9 @@ def run(args_dict):
 
     if model_filter:
         filters = list(ModelFilter.FILTER_DICT.keys())
-        logger.debug(f"Filters allowed: {filters}")
+        logger.info(f"Filters allowed: {filters}")
         validated_model_filter = [f.lower() for f in model_filter if f in filters]
-        logger.debug(f"Filters used: {validated_model_filter}")
+        logger.info(f"Filters used: {validated_model_filter}")
     else:
         validated_model_filter = None
 
@@ -177,7 +224,8 @@ def run(args_dict):
         os.system("call tc.bat")
 
     print("##### Execution Summary")
-    print(f"      Model source: {str(root_path)=}, {test_model=}")
+    root_path=str(root_path)
+    print(f"      Model source: {root_path=}, {test_model=}")
     print(f"      Model types: {component_diagram=}, {class_diagram=}")
     print(f"      Model filters: {validated_model_filter}")
     print(f"      Generate Images: {plant_uml=}, {open_images=}")
@@ -194,8 +242,8 @@ if __name__ == "__main__":
     config = Config.DEFAULT.value
     # variables
     parser.add_argument("--path","-p",default=config["path"],help="StartPath",metavar='File Path')
-    parser.add_argument('--loglevel',"-l", default=config["loglevel"], help="Log Level")
-    parser.add_argument('--filter',"-f", default=config["filter"], help="Model Filter List")
+    parser.add_argument('--loglevel',"-l", default=config["loglevel"], help="Log Level (DEBUG,INFO,WARNING,ERROR)")
+    parser.add_argument('--filter',"-f", default=config["filter"], help="Model Filter List [...], or use filter options ")
     # flags activating options
     parser.add_argument('--test',"-t", dest='test', action='store_true',help="Test using reference model")
     parser.add_argument('--component_diagram',"-o", dest='component_diagram', action='store_true',help="Create Component Diagram")
@@ -207,7 +255,7 @@ if __name__ == "__main__":
     parser.add_argument('--no_class_diagram',"-nc", dest='no_class_diagram', action='store_true',help="Do not Create Class Diagram")
     parser.add_argument('--no_plant_uml',"-nu", dest='no_plant_uml', action='store_true',help="Do not Create PLantUML diagram images ./bat/plantuml.bat")
     parser.add_argument('--no_total_commander',"-nt", dest='no_total_commander', action='store_true',help="Do not Open Total Commander ./bat/tc.bat")
-    parser.add_argument('--no_images',"-i", dest='no_images', action='store_true',help="Open Images (Default Image Viewer)")
+    parser.add_argument('--no_images',"-ni", dest='no_images', action='store_true',help="Open Images (Default Image Viewer)")
     parser.set_defaults(no_class_diagram=config["no_class_diagram"])
     parser.set_defaults(no_images=config["no_images"])
     parser.set_defaults(no_plant_uml=config["no_plant_uml"])
@@ -222,6 +270,9 @@ if __name__ == "__main__":
     parser.set_defaults(filter_sys=False)
     parser.set_defaults(filter_inner=False)
     parser.set_defaults(filter_internal=False)
+    # extended info
+    parser.add_argument('--info',"-i", dest='info', action='store_true',help="Show extended configuration information)")
+    parser.set_defaults(info=False)
 
     args = parser.parse_args()
     args_dict = {k:v for k,v in args._get_kwargs()}
@@ -230,5 +281,5 @@ if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
                         level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
 
-    logger.info(f"Arguments: {args}")
+    logger.debug(f"Arguments: {args}")
     run(args_dict)
