@@ -19,8 +19,8 @@ def itemized_dict(d:dict,parent_id):
     """ turns lists into dicts, each list item gets an index """
     # logging.debug("START")
     for k, v in d.copy().items():
-        obj_id = get_hash(str(k)+str(id(d)))
-        object_tree[obj_id]={"parent":parent_id,"key":k,"obj":v,"obj_type":type(v)}
+        obj_id = get_hash(str(k)+str(v))
+        object_tree[obj_id]={"parent":parent_id,"key":k,"obj":v,"obj_type":type(v),"id":obj_id}
         if isinstance(v, dict): # For DICT
             d[k]=itemized_dict(v,obj_id)
         elif isinstance(v, list): # itemize LIST as dict
@@ -48,5 +48,26 @@ my_tree.create_tree(object_tree)
 my_root=my_tree.root_id
 my_hierarchy=my_tree.hierarchy
 my_levels=my_tree.max_level
+
+# take a node
+id='103797ef05b99632135033547a8b3715'
+obj_info=object_tree[id]
+predecessors = my_tree.get_predecessors(id)
+key_list=[id,*predecessors]
+# now you can create key navigation path to access object
+#for k in key_list:
+#    obj_ref = object_tree[k]["key"]
+#    pass
+keys = [object_tree[k].get("key") for k in key_list ]
+# Drop the None Value
+keys = [k for k in keys if k is not None]
+keys.reverse()
+pass
+# Now you can access the object
+obj = d_new
+for k in keys:
+    print(f"Key {k}")
+    obj=obj[k]
+print(f"Object with index {keys}, id {id}, value: {obj}")
 
 pass
