@@ -136,19 +136,33 @@ class ParserHelper():
         elif parser_template == ParserTemplate.BOOL_TEMPLATE_FALSE:
             self._parser.set_defaults(**{long_arg:True})       
             pass
+    
+    def add_arguments(self,arg_list:list,add_log_level:bool=True):
+        """ multiple inserts of arguments, each entri needs to conform to the schema 
+            [long_shortcut(str),short_shortcut(str),argument_dict(dict),ParserTemplate(ParserTemplate)]
+        """
+        for arg in arg_list:
+            long_arg = arg[0]
+            short_arg = arg[1]
+            arg_dict = arg[2]
+            parser_template = arg[3]
+            logger.debug(f"Adding Parameter {long_arg}/{short_arg}, template {parser_template.name}")            
+            self.add_argument(long_arg,short_arg,arg_dict,parser_template)
+        if add_log_level:
+            self.add_loglevel_arg()
 
-if __name__ == "__main__":
-    loglevel = logging.DEBUG
-    logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
-                        level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")        
-    argument_dict = {  "default":"default",
-                        "help":"help description",
-                        "metavar":"<var>" }   
-    parser =  ParserHelper(description="Test Description")
-    parser.add_argument("myvar","v",argument_dict,ParserTemplate.PARAM_TEMPLATE)
-    argument_dict = { "help":"help flag (Default False, True if set)" }   
-    parser.add_argument("myflag","f",argument_dict,ParserTemplate.BOOL_TEMPLATE_TRUE)
-    parser.add_loglevel_arg()
+if __name__ == "__main__":       
+    parser =  ParserHelper(description="Test Description")    
+    arg_list=[["myvar","v",{  "default":"default","help":"help description","metavar":"<var>" } ,
+               ParserTemplate.PARAM_TEMPLATE],
+              ["myflag","f",
+               { "help":"help flag (Default False, True if set)" },
+               ParserTemplate.BOOL_TEMPLATE_TRUE]]
+    parser.add_arguments(arg_list,add_log_level=True)
     args_dict = parser.parse_args()
     print(args_dict)
+    loglevel = args_dict.get("loglevel",LogLevel.INFO.value)
+    logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
+                        level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")     
+    logger.info(f"hello {loglevel}")
 
