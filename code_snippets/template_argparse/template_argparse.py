@@ -151,14 +151,20 @@ class ParserHelper():
         if add_log_level:
             self.add_loglevel_arg()
 
-if __name__ == "__main__":       
-    parser =  ParserHelper(description="Test Description")    
+def get_argument_list()->list:
+    """ compiles argument list """
     arg_list=[["myvar","v",{  "default":"default","help":"help description","metavar":"<var>" } ,
                ParserTemplate.PARAM_TEMPLATE],
               ["myflag","f",
                { "help":"help flag (Default False, True if set)" },
-               ParserTemplate.BOOL_TEMPLATE_TRUE]]
+               ParserTemplate.BOOL_TEMPLATE_TRUE]]    
+    return arg_list
+
+if __name__ == "__main__":       
+    parser =  ParserHelper(description="Test Description",prog="my Prog",epilog="The End")    
+    arg_list = get_argument_list()
     parser.add_arguments(arg_list,add_log_level=True)
+    # all command line arguments passed as dict
     args_dict = parser.parse_args()
     print(args_dict)
     loglevel = args_dict.get("loglevel",LogLevel.INFO.value)
