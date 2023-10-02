@@ -99,7 +99,7 @@ def read_json(filepath:str):
     return data
 
 def save_json(filepath,data:dict):
-    """ Saves dictionary data as UTF8 """
+    """ Saves dictionary data as UTF8 json """
     # TODO encode date time see
     # https://stackoverflow.com/questions/11875770/how-to-overcome-datetime-datetime-not-json-serializable
 
@@ -111,6 +111,19 @@ def save_json(filepath,data:dict):
             print(traceback.format_exc())
 
         return None
+    
+def save_yaml(filepath,data:dict):
+    """ Saves dictionary data as UTF8 yaml"""
+    # TODO encode date time and other objects in dict see
+    # https://stackoverflow.com/questions/11875770/how-to-overcome-datetime-datetime-not-json-serializable
+
+    with open(filepath, 'w', encoding='utf-8') as yaml_file:
+        try:
+            yaml.dump(data,yaml_file,default_flow_style=False)
+        except:
+            print(f"Exception writing file {filepath}")
+            print(traceback.format_exc())
+        return None    
 
 def md2toc(f:str,as_string:bool=True):
     """ reads contents of a markdown file, extracts header lines to table of contents
