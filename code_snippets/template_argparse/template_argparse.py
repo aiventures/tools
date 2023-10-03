@@ -9,7 +9,8 @@ import os
 from enum import Enum
 from pathlib import Path
 from datetime import datetime as DateTime
-from tools import file_module as fm
+import yaml
+from yaml import CLoader
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,9 @@ class ParserTemplate(Enum):
 class PersistenceHelper():
     """ Helper class to read / write (single) file """
 
+    # byte order mark indicates non standard UTF-8
+    BOM = '\ufeff'
+
     ALLOWED_FILE_TYPES = ["yaml","txt","json","plantuml"]
 
     def __init__(self,f_read:str=None,f_save:str=None,**kwargs) -> None:
@@ -208,6 +212,86 @@ class PersistenceHelper():
             out.append(self._csv_sep.join(data_row))
         return out
 
+    @staticmethod
+    def read_txt_file(filepath,encoding='utf-8',comment_marker="#",skip_blank_lines=True):
+        """ reads data as lines from file
+        """
+        lines = []
+        bom_check = False
+        try:
+            with open(filepath,encoding=encoding,errors='backslashreplace') as fp:
+                for line in fp:
+                    if not bom_check:
+                        bom_check = True
+                        if line[0] == PersistenceHelper.BOM:
+                            line = line[1:]
+                            logger.warning("Line contains BOM Flag, file is special UTF-8 format with BOM")
+                    if len(line.strip())==0 and skip_blank_lines:
+                        continue
+                    if line[0]==comment_marker:
+                        continue
+                    lines.append(line.strip())
+        except:
+            logger.error(f"Exception reading file {filepath}",exc_info=True)
+        return lines
+
+    @staticmethod
+    def read_yaml(filepath:str):
+        """ Reads YAML file"""
+        if not os.path.isfile(filepath):
+            logger.warning(f"File path {filepath} does not exist. Exiting...")
+            return None
+        data = None
+        try:
+            with open(filepath, encoding='utf-8',mode='r') as stream:
+                data = yaml.load(stream,Loader=CLoader)
+        except:
+            logger.error(f"Error opening {filepath} ****",exc_info=True)
+        return data
+
+    @staticmethod
+    def read_json(filepath:str):
+        """ Reads JSON file"""
+        data = None
+
+        if not os.path.isfile(filepath):
+            logger.warning(f"File path {filepath} does not exist. Exiting...")
+            return None
+        try:
+            with open(filepath,encoding='utf-8') as json_file:
+                data = json.load(json_file)
+        except:
+            logger.error(f"Error opening {filepath} ****",exc_info=True)
+
+        return data
+
+    @staticmethod
+    def save_json(filepath,data:dict):
+        """ Saves dictionary data as UTF8 json """
+        # TODO encode date time see
+        # https://stackoverflow.com/questions/11875770/how-to-overcome-datetime-datetime-not-json-serializable
+
+        with open(filepath, 'w', encoding='utf-8') as json_file:
+            try:
+                json.dump(data, json_file, indent=4,ensure_ascii=False)
+            except:
+                logger.error("Exception writing file {filepath}",exc_info=True)
+
+            return None
+
+    @staticmethod
+    def save_yaml(filepath,data:dict):
+        """ Saves dictionary data as UTF8 yaml"""
+        # encode date time and other objects in dict see
+        # https://stackoverflow.com/questions/11875770/how-to-overcome-datetime-datetime-not-json-serializable
+
+        with open(filepath, 'w', encoding='utf-8') as yaml_file:
+            try:
+                yaml.dump(data,yaml_file,default_flow_style=False)
+            except:
+                logger.error(f"Exception writing file {filepath}",exc_info=True)
+            return None
+
     def read(self):
         """ read file, depending on file extension """
         if not self._f_read:
@@ -217,13 +301,13 @@ class PersistenceHelper():
         p = Path(self._f_read)
         suffix = p.suffix[1:].lower()
         if suffix in ["txt","plantuml","csv"]:
-            out = fm.read_txt_file(self._f_read)
+            out = PersistenceHelper.read_txt_file(self._f_read)
             if suffix == "csv":
                 out = self._csv2dict(out)
         elif suffix == "yaml":
-            out = fm.read_yaml(self._f_read)
+            out = PersistenceHelper.read_yaml(self._f_read)
         elif suffix == "json":
-            out = fm.read_json(self._f_read)
+            out = PersistenceHelper.read_json(self._f_read)
         else:
             logger.warning(f"File {self._f_read}, no supported suffix {suffix}, skip read")
             out = None
@@ -231,6 +315,15 @@ class PersistenceHelper():
         logger.info(f"Reading {self._f_read}")
 
         return out
+
+    def save_txt_file(self,filepath,data:str,encoding='utf-8'):
+        """ saves string to file  """
+        try:
+            with open(filepath,encoding=encoding,mode="+wt") as fp:
+                fp.write(data)
+        except:
+            logger.error(f"Exception writing file {filepath}",exc_info=True)
+        return
 
     def save(self,data):
         """ save file """
@@ -255,7 +348,7 @@ class PersistenceHelper():
                 logger.warning(f"Data is not of type string, won't save {self._f_save}")
                 return
             data = data+"\n"
-            fm.save_txt_file(self._f_save,data)
+            self.save_txt_file(self._f_save,data)
         elif suffix in ["yaml","json"]:
             if isinstance(data,list):
                 data = {"data":data}
@@ -266,9 +359,9 @@ class PersistenceHelper():
             # convert objects in json
             data = PersistenceHelper.dict_stringify(data)
             if suffix == "yaml":
-                fm.save_yaml(self._f_save,data)
+                PersistenceHelper.save_yaml(self._f_save,data)
             elif suffix == "json":
-                fm.save_json(self._f_save,data)
+                PersistenceHelper.save_json(self._f_save,data)
         else:
             logger.warning(f"File {self._f_save}, no supported suffix {suffix} (allowed: {PersistenceHelper.ALLOWED_FILE_TYPES}), skip save {self._f_save}")
             return
@@ -416,8 +509,8 @@ if __name__ == "__main__":
 
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
                         level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
-    
-    logger.info(f"\nConfig:\n {json.dumps(config_dict, indent=4)}")    
+
+    logger.info(f"\nConfig:\n {json.dumps(config_dict, indent=4)}")
 
     # get the file names from configuration
     work_dir = r"C:\<...>\Desktop"
