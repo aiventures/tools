@@ -102,15 +102,26 @@ class ParserTemplate(Enum):
                             "args": ["--dec_sep","-ds"]
                            }
 
+    PARAM_ADD_TIMESTAMP = { "dest":"add_timestamp",
+                            "action":ParserAttribute.STORE_TRUE.value,
+                            "help":"add timestamp to filename",
+                            "args": ["--add_timestamp","-as"]
+                           }
+
     @staticmethod
     def get_parser_arguments(template,arg_long:str,arg_short:str,params:dict)->dict:
         """ get parser args and kwargs from a template dict """
         cmd_args=["--"+arg_long,"-"+arg_short]
         # try to get every arguments in the template
         template_dict = ParserTemplate[template.name].value.copy()
-        if ( template == ParserTemplate.BOOL_TEMPLATE_TRUE or
-           template == ParserTemplate.BOOL_TEMPLATE_FALSE ):
+        # copy over dest value for flag arguments
+        try:
+            template_dict["dest"]
             template_dict["dest"]=arg_long
+            #arg_is_flag = True
+        except KeyError:
+            pass
+            #arg_is_flag = False
         # use passed arguments or default values from template
         for key,template_value in template_dict.items():
             try:
@@ -148,6 +159,8 @@ class PersistenceHelper():
         # get more params form kwargs
         self._dec_sep = kwargs.get("dec_sep",",")
         self._csv_sep = kwargs.get("csv_sep",";")
+        self._add_timestamp = kwargs.get("add_timestamp",False)
+
         logger.debug(f"Decimal Separator: {self._dec_sep}, CSV Separator: {self._csv_sep}")
 
     @staticmethod
@@ -325,12 +338,27 @@ class PersistenceHelper():
             logger.error(f"Exception writing file {filepath}",exc_info=True)
         return
 
+    def _get_adjusted_filename(self,f):
+        """ gets adjusted and absolute filename """
+        p_file = Path(f)
+        dt = DateTime.now().strftime('%Y%m%d_%H%M%S')
+        if self._add_timestamp:
+            p_file_new = dt+"_"+p_file.name
+        else:
+            p_file_new = p_file.name
+        p_new = str(p_file.parent.absolute().joinpath(p_file_new))
+        return p_new
+
+
+
+
     def save(self,data):
         """ save file """
         if not self._f_save:
             logger.warning("No file name for saving data was found")
             return
-        p = Path(self._f_save)
+        f_save = self._get_adjusted_filename(self._f_save)
+        p = Path(f_save)
         suffix = p.suffix[1:].lower()
 
         if suffix in ["txt","plantuml","csv"]:
@@ -342,30 +370,30 @@ class PersistenceHelper():
                     data = self._dicts2csv(data)
                     data = "\n".join(data)
                     if not data:
-                        logger.error(f"Elements in list are not of type string / dict, won't save {self._f_save}")
+                        logger.error(f"Elements in list are not string / (plain) dicts, won't save {f_save}")
                         return
             if not isinstance(data,str):
-                logger.warning(f"Data is not of type string, won't save {self._f_save}")
+                logger.warning(f"Data is not of type string, won't save {f_save}")
                 return
             data = data+"\n"
-            self.save_txt_file(self._f_save,data)
+            self.save_txt_file(f_save,data)
         elif suffix in ["yaml","json"]:
             if isinstance(data,list):
                 data = {"data":data}
                 logger.warning(f"Data is a list, will save it as pseudo dict in {suffix} File")
             if not isinstance(data,dict):
-                logger.warning("Data is not a dict, won't save {self._f_save}")
+                logger.warning("Data is not a dict, won't save {f_save}")
                 return
             # convert objects in json
             data = PersistenceHelper.dict_stringify(data)
             if suffix == "yaml":
-                PersistenceHelper.save_yaml(self._f_save,data)
+                PersistenceHelper.save_yaml(f_save,data)
             elif suffix == "json":
-                PersistenceHelper.save_json(self._f_save,data)
+                PersistenceHelper.save_json(f_save,data)
         else:
-            logger.warning(f"File {self._f_save}, no supported suffix {suffix} (allowed: {PersistenceHelper.ALLOWED_FILE_TYPES}), skip save {self._f_save}")
+            logger.warning(f"File {f_save}, no supported suffix {suffix} (allowed: {PersistenceHelper.ALLOWED_FILE_TYPES}), skip save")
             return
-        logger.info(f"Saved data: {os.path.abspath(self._f_save)}")
+        logger.info(f"Saved [{suffix}] data: {f_save}")
 
 class ParserHelper():
     """ Helper class for argument parsing """
@@ -403,6 +431,16 @@ class ParserHelper():
         except KeyError:
             logger.warning(f"Couldn't find 'args' value in Parser Template {parser_template}")
             return
+        try:
+            action = template_dict["action"]
+            # use the dest value from the template
+            dest = template_dict["dest"]
+            if action == ParserAttribute.STORE_TRUE.value:
+                self._parser.set_defaults(**{dest:False})
+            else:
+                self._parser.set_defaults(**{dest:True})
+        except KeyError:
+            pass
         self._parser.add_argument(*args,**template_dict)
         return (args,template_dict)
 
@@ -438,10 +476,15 @@ class ParserHelper():
                                                         argument_dict)
         self._parser.add_argument(*args,**kwargs)
         # add default value in case we have a bool argument
-        if parser_template == ParserTemplate.BOOL_TEMPLATE_TRUE:
-            self._parser.set_defaults(**{long_arg:False})
-        elif parser_template == ParserTemplate.BOOL_TEMPLATE_FALSE:
-            self._parser.set_defaults(**{long_arg:True})
+        try:
+            action = parser_template.value["action"]
+            if action == ParserAttribute.STORE_TRUE.value:
+                self._parser.set_defaults(**{long_arg:False})
+            else:
+                self._parser.set_defaults(**{long_arg:True})
+        except KeyError:
+            pass
+
         return (args,kwargs)
 
     def add_arguments(self,arg_list:list,
@@ -449,7 +492,8 @@ class ParserHelper():
                       output_filetype:str=None,
                       add_log_level:bool=True,
                       add_csv_separator:bool=True,
-                      add_decimal_separator:bool=True):
+                      add_decimal_separator:bool=True,
+                      add_timestamp:bool=False):
         """ multiple inserts of arguments, each entry needs to conform to the schema
             [long_shortcut(str),short_shortcut(str),argument_dict(dict),ParserTemplate(ParserTemplate)]
             Optionally create argument templates for logging level, input file and output file
@@ -477,6 +521,8 @@ class ParserHelper():
         if add_decimal_separator:
             self.add_arg_template(ParserTemplate.PARAM_DECIMAL_SEP)
             #self.add_decimal_separator()
+        if add_timestamp:
+            self.add_arg_template(ParserTemplate.PARAM_ADD_TIMESTAMP)
 
 def get_argument_list()->list:
     """ compiles argument list """
@@ -491,7 +537,7 @@ if __name__ == "__main__":
     parser =  ParserHelper(description="Test Description",prog="my Prog",epilog="The End")
     # handle files, in general use case it is to read a file and save a file
     arg_list = get_argument_list()
-    parser.add_arguments(arg_list,add_log_level=True,input_filetype="json",output_filetype="txt")
+    parser.add_arguments(arg_list,add_log_level=True,input_filetype="json",output_filetype="txt",add_timestamp=True)
 
     # test file param, added manually
     # parser.add_file_param(is_output=True,suffix="json",params={"help":"my own help text","default":"my_own_file_name"})
@@ -499,13 +545,14 @@ if __name__ == "__main__":
 
     # all command line arguments passed as dict, get some cofnigurations
     # debug configuration by adding command string
-    config_dict = parser.parse_args("--file_in test.json --file_out test_out.json".split())
+    config_dict = parser.parse_args("--file_in test2.csv --file_out test_out.csv".split())
     # config_dict = parser.parse_args()
     loglevel = config_dict.get("loglevel",LogLevel.INFO.value)
     csv_sep = config_dict.get("csv_sep",";")
     dec_sep = config_dict.get("dec_sep",",")
     file_in = config_dict.get("file_in")
     file_out = config_dict.get("file_out")
+    add_timestamp = config_dict.get("add_timestamp",False)
 
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
                         level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
@@ -513,10 +560,10 @@ if __name__ == "__main__":
     logger.info(f"\nConfig:\n {json.dumps(config_dict, indent=4)}")
 
     # get the file names from configuration
-    work_dir = r"C:\<...>\Desktop"
+    work_dir = r"C:\<...>"
     os.chdir(work_dir)
 
-    file_helper = PersistenceHelper(f_read=file_in,f_save=file_out)
+    file_helper = PersistenceHelper(f_read=file_in,f_save=file_out,add_timestamp=add_timestamp)
     in_dict = file_helper.read()
     file_helper.save(in_dict)
     pass
