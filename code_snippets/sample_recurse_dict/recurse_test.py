@@ -9,6 +9,7 @@ import sys
 from enum import Enum
 # using the tree util to create a tree
 from tools.tree_util import Tree
+from datetime import datetime as DateTime
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +253,7 @@ class DictParser():
             else:
                 d.pop(k)
                 d[k] = v
-                return d
+                # return d
         return d
 
     def _get_key_map(self):
@@ -271,7 +272,7 @@ if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
                         level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
     # cwd = os.getcwd()
-    if False:
+    if True:
         test_struc = ('{"k1":"value1",'
                     '"test_key":500,'
                     '"k2":{"k2.1":5,"k2.2":"v2.2",'

@@ -8,6 +8,7 @@ import sys
 import os
 from enum import Enum
 from pathlib import Path
+from datetime import datetime as DateTime
 from tools import file_module as fm
 
 logger = logging.getLogger(__name__)
@@ -66,13 +67,6 @@ class ParserTemplate(Enum):
                        "metavar":"var"
                     }
 
-    PARAM_LOGLEVEL = { "default":"info",
-                       "type":str,
-                       "choices":["debug","info","warning","error"],
-                       "help":"Set loglevel to (debug,info,warning,error)",
-                       "metavar":"<level>"
-                    }
-
     PARAM_INPUTFILE = { "default":"file_in",
                         "type":str,
                         "help":"Input file path",
@@ -84,6 +78,28 @@ class ParserTemplate(Enum):
                         "help":"Output file path",
                         "metavar": "<filename_out>"
                      }
+
+    PARAM_LOGLEVEL = { "default":"info",
+                       "type":str,
+                       "choices":["debug","info","warning","error"],
+                       "help":"Set loglevel to (debug,info,warning,error)",
+                       "metavar":"<level>",
+                       "args": ["--loglevel","-lg"]
+                    }
+
+    PARAM_CSV_SEPARATOR = { "default":";",
+                            "type":str,
+                            "help":"csv file separator, default is ;",
+                            "metavar": "<sep>",
+                            "args": ["--csv_sep","-cs"]
+                           }
+
+    PARAM_DECIMAL_SEP = {   "default":",",
+                            "type":str,
+                            "help":"decimal spearator, default is ,",
+                            "metavar": "<decsep>",
+                            "args": ["--dec_sep","-ds"]
+                           }
 
     @staticmethod
     def get_parser_arguments(template,arg_long:str,arg_short:str,params:dict)->dict:
@@ -112,19 +128,85 @@ class PersistenceHelper():
 
     ALLOWED_FILE_TYPES = ["yaml","txt","json","plantuml"]
 
-    def __init__(self,f_read:str=None,f_save:str=None) -> None:
+    def __init__(self,f_read:str=None,f_save:str=None,**kwargs) -> None:
         """ constructor """
         self._cwd = os.getcwd()
         if f_read:
             if os.path.isfile(f_read):
                 self._f_read = os.path.abspath(f_read)
-                logger.info(f"File read path: {f_read}")
+                logger.info(f"File read path: [{self._f_read}]")
             else:
                 self._f_read = None
                 logger.warning(f"File path {f_read} not found, check")
         if f_save:
             logger.info(f"File save path: {f_save}")
             self._f_save = f_save
+        # get more params form kwargs
+        self._dec_sep = kwargs.get("dec_sep",",")
+        self._csv_sep = kwargs.get("csv_sep",";")
+        logger.debug(f"Decimal Separator: {self._dec_sep}, CSV Separator: {self._csv_sep}")
+
+    @staticmethod
+    def dict_stringify(d:dict):
+        """ converts a dict with objects to stringified dict (for json) """
+        for k, v in d.copy().items():
+            v_type = str(type(v).__name__)
+            logger.debug(f"Key {k} type {v_type}")
+            if isinstance(v, dict): # For DICT
+                d[k]= PersistenceHelper.dict_stringify(v)
+            elif isinstance(v, list): # itemize LIST as dict
+                d[k] = [PersistenceHelper.dict_stringify(i) for i in v]
+            elif isinstance(v, str): # Update Key-Value
+                d.pop(k)
+                d[k] = v
+            elif isinstance(v,DateTime): # stringify date
+                d.pop(k)
+                d[k]=v.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                d.pop(k)
+                d[k] = v
+        return d
+
+    def _csv2dict(self,lines):
+        """ transform csv lines to dictionary """
+        out_list = []
+        if len(lines) <= 1:
+            logger.warning("Too few lines in CSV")
+            return {}
+        keys = lines[0].split( self._csv_sep)
+        num_keys = len(keys)
+        logger.debug(f"CSV COLUMNS ({num_keys}): {keys}")
+        for i,l in enumerate(lines[1:]):
+            values = l.split( self._csv_sep)
+            if len(values) != num_keys:
+                logger.warning(f"Entry [{i}]: Wrong number of entries, expected {num_keys} {l}")
+                continue
+            out_list.append(dict(zip(keys,values)))
+        logger.debug(f"Read {len(out_list)} lines from CSV")
+        return out_list
+
+    def _dicts2csv(self,data_list:list):
+        """ try to convert a list of dictionaries into csv format """
+        out = []
+        if not list:
+            logger.warning("no data in list")
+            return None
+        key_row = data_list[0]
+        if not isinstance(key_row,dict):
+            logger.warning("List data is ot a dictionary, nothing will be returned")
+            return None
+        keys = list(key_row.keys())
+        out.append(self._csv_sep.join(keys))
+        for data in data_list:
+            data_row = []
+            for k in keys:
+                v=data.get(k,"")
+                if self._csv_sep in v:
+                    logger.warning(f"CSV Separator {v} found in {k}:{v}, will be replaced by _sep_")
+                    v = v.replace(self._csv_sep,"_sep_")
+                data_row.append(v)
+            out.append(self._csv_sep.join(data_row))
+        return out
 
     def read(self):
         """ read file, depending on file extension """
@@ -136,6 +218,8 @@ class PersistenceHelper():
         suffix = p.suffix[1:].lower()
         if suffix in ["txt","plantuml","csv"]:
             out = fm.read_txt_file(self._f_read)
+            if suffix == "csv":
+                out = self._csv2dict(out)
         elif suffix == "yaml":
             out = fm.read_yaml(self._f_read)
         elif suffix == "json":
@@ -155,25 +239,40 @@ class PersistenceHelper():
             return
         p = Path(self._f_save)
         suffix = p.suffix[1:].lower()
+
         if suffix in ["txt","plantuml","csv"]:
             if isinstance(data,list):
-                data = "\n".join(data)
+                try:
+                    data = "\n".join(data)
+                except TypeError:
+                    # try to convert into a csv list
+                    data = self._dicts2csv(data)
+                    data = "\n".join(data)
+                    if not data:
+                        logger.error(f"Elements in list are not of type string / dict, won't save {self._f_save}")
+                        return
             if not isinstance(data,str):
-                logger.warning("Data is not of type string, won't save")
+                logger.warning(f"Data is not of type string, won't save {self._f_save}")
                 return
+            data = data+"\n"
             fm.save_txt_file(self._f_save,data)
-
-        if suffix in ["yaml","json"] and not isinstance(data,dict):
-            logger.warning("Data is not a dict, won't save")
+        elif suffix in ["yaml","json"]:
+            if isinstance(data,list):
+                data = {"data":data}
+                logger.warning(f"Data is a list, will save it as pseudo dict in {suffix} File")
+            if not isinstance(data,dict):
+                logger.warning("Data is not a dict, won't save {self._f_save}")
+                return
+            # convert objects in json
+            data = PersistenceHelper.dict_stringify(data)
+            if suffix == "yaml":
+                fm.save_yaml(self._f_save,data)
+            elif suffix == "json":
+                fm.save_json(self._f_save,data)
+        else:
+            logger.warning(f"File {self._f_save}, no supported suffix {suffix} (allowed: {PersistenceHelper.ALLOWED_FILE_TYPES}), skip save {self._f_save}")
             return
-
-        if suffix == "yaml":
-            fm.save_yaml(self._f_save,data)
-        elif suffix == "json":
-            fm.save_json(self._f_save,data)
-
-        if not suffix in PersistenceHelper.ALLOWED_FILE_TYPES:
-            logger.warning(f"File {self._f_save}, no supported suffix {suffix}, skip save")
+        logger.info(f"Saved data: {os.path.abspath(self._f_save)}")
 
 class ParserHelper():
     """ Helper class for argument parsing """
@@ -193,9 +292,9 @@ class ParserHelper():
             self._parser = argparse.ArgumentParser()
         self._args_dict = {}
 
-    def parse_args(self):
-        """ get parsed results """
-        self._args_dict = vars(self._parser.parse_args())
+    def parse_args(self,*testargs):
+        """ get parsed results, additional args value can be used for debugging """
+        self._args_dict = vars(self._parser.parse_args(*testargs))
         # transform special arguments
         loglevel = self._args_dict.get("loglevel")
         if loglevel:
@@ -203,12 +302,16 @@ class ParserHelper():
 
         return self._args_dict
 
-    def add_loglevel_arg(self)-> set:
-        """ add loglevel option """
-        args = ["--loglevel","-lg"]
-        kwargs = ParserTemplate.PARAM_LOGLEVEL.value
-        self._parser.add_argument(*args,**kwargs)
-        return (args,kwargs)
+    def add_arg_template(self,parser_template:Enum)->set:
+        """ add arguments templates """
+        template_dict = parser_template.value.copy()
+        try:
+            args = template_dict.pop("args")
+        except KeyError:
+            logger.warning(f"Couldn't find 'args' value in Parser Template {parser_template}")
+            return
+        self._parser.add_argument(*args,**template_dict)
+        return (args,template_dict)
 
     def add_file_param(self,is_output:bool=False,suffix:str="txt",params:dict=None):
         """ add file input / output file, default is input """
@@ -249,9 +352,11 @@ class ParserHelper():
         return (args,kwargs)
 
     def add_arguments(self,arg_list:list,
-                      add_log_level:bool=True,
                       input_filetype:str="json",
-                      output_filetype:str=None):
+                      output_filetype:str=None,
+                      add_log_level:bool=True,
+                      add_csv_separator:bool=True,
+                      add_decimal_separator:bool=True):
         """ multiple inserts of arguments, each entry needs to conform to the schema
             [long_shortcut(str),short_shortcut(str),argument_dict(dict),ParserTemplate(ParserTemplate)]
             Optionally create argument templates for logging level, input file and output file
@@ -266,13 +371,19 @@ class ParserHelper():
             self.add_argument(long_arg,short_arg,arg_dict,parser_template)
             logger.debug(f"Adding argument {long_arg}, {parser_template}")
         # add template parameters
-        if add_log_level:
-            self.add_loglevel_arg()
         if input_filetype and input_filetype.lower() in PersistenceHelper.ALLOWED_FILE_TYPES:
             self.add_file_param(suffix=input_filetype)
         if output_filetype and output_filetype.lower() in PersistenceHelper.ALLOWED_FILE_TYPES:
             self.add_file_param(is_output=True,suffix=output_filetype)
-
+        if add_log_level:
+            self.add_arg_template(ParserTemplate.PARAM_LOGLEVEL)
+            #self.add_loglevel_arg()
+        if add_csv_separator:
+            self.add_arg_template(ParserTemplate.PARAM_CSV_SEPARATOR)
+            #self.add_csv_separator()
+        if add_decimal_separator:
+            self.add_arg_template(ParserTemplate.PARAM_DECIMAL_SEP)
+            #self.add_decimal_separator()
 
 def get_argument_list()->list:
     """ compiles argument list """
@@ -293,17 +404,26 @@ if __name__ == "__main__":
     # parser.add_file_param(is_output=True,suffix="json",params={"help":"my own help text","default":"my_own_file_name"})
     # parser.add_file_param(suffix="json",params={"help":"my own help text","default":"myownfile"})
 
-    # all command line arguments passed as dict
-    config_dict = parser.parse_args()
-    print(f"Config:\n {json.dumps(config_dict, indent=4)}")
+    # all command line arguments passed as dict, get some cofnigurations
+    # debug configuration by adding command string
+    config_dict = parser.parse_args("--file_in test.json --file_out test_out.json".split())
+    # config_dict = parser.parse_args()
     loglevel = config_dict.get("loglevel",LogLevel.INFO.value)
-    logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
-                        level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
-
-    # get the file names from configuration
+    csv_sep = config_dict.get("csv_sep",";")
+    dec_sep = config_dict.get("dec_sep",",")
     file_in = config_dict.get("file_in")
     file_out = config_dict.get("file_out")
+
+    logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
+                        level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
+    
+    logger.info(f"\nConfig:\n {json.dumps(config_dict, indent=4)}")    
+
+    # get the file names from configuration
+    work_dir = r"C:\<...>\Desktop"
+    os.chdir(work_dir)
+
     file_helper = PersistenceHelper(f_read=file_in,f_save=file_out)
-
+    in_dict = file_helper.read()
+    file_helper.save(in_dict)
     pass
-

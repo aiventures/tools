@@ -1,7 +1,7 @@
 """ module to read write some commonplace data """
 #from code import compile_command
 import os
-#import sys
+import sys
 #import glob
 
 import re
@@ -14,12 +14,18 @@ import json
 import traceback
 import yaml
 from yaml import CLoader
+import logging
 
 # https://superuser.com/questions/609447/how-to-install-the-win32com-python-library
 # pip install -U pypiwin32
 import win32com.client
 
 from tools import img_file_info_xls as img_info
+
+logger = logging.getLogger(__name__)
+
+# byte order mark for some utf8 file types
+BOM = '\ufeff'
 
 # functions to read file content
 displayfunctions_dict={"url":"get_url_from_link",
@@ -34,28 +40,32 @@ def read_txt_file(filepath,encoding='utf-8',comment_marker="#",skip_blank_lines=
     """ reads data as lines from file
     """
     lines = []
+    bom_check = False
     try:
         with open(filepath,encoding=encoding,errors='backslashreplace') as fp:
             for line in fp:
+                if not bom_check:
+                    bom_check = True
+                    if line[0] == BOM:
+                        line = line[1:]
+                        logger.warning(f"Line contains BOM Flag, file is special UTF-8 format with BOM")
                 if len(line.strip())==0 and skip_blank_lines:
                     continue
                 if line[0]==comment_marker:
                     continue
-                lines.append(line)
+                lines.append(line.strip())
     except:
-        print(f"Exception reading file {filepath}")
-        print(traceback.format_exc())
+        logger.error(f"Exception reading file {filepath}",exc_info=True)
     return lines
 
 def save_txt_file(filepath,data:str,encoding='utf-8'):
-    """ saves data as lines from file
+    """ saves string to file
     """
     try:
         with open(filepath,encoding=encoding,mode="+wt") as fp:
             fp.write(data)
     except:
-        print(f"Exception writing file {filepath}")
-        print(traceback.format_exc())
+        logger.error(f"Exception writing file {filepath}",exc_info=True)
     return
 
 
@@ -63,7 +73,7 @@ def read_yaml(filepath:str):
     """ Reads YAML file"""
 
     if not os.path.isfile(filepath):
-        print(f"File path {filepath} does not exist. Exiting...")
+        logger.warning(f"File path {filepath} does not exist. Exiting...")
         return None
 
     data = None
@@ -73,10 +83,7 @@ def read_yaml(filepath:str):
             data = yaml.load(stream,Loader=CLoader)
 
     except:
-        print(f"**** Error opening {filepath} ****")
-        print(traceback.format_exc())
-        print("***************")
-
+        logger.error(f"**** Error opening {filepath} ****",exc_info=True)
     return data
 
 
@@ -85,16 +92,14 @@ def read_json(filepath:str):
     data = None
 
     if not os.path.isfile(filepath):
-        print(f"File path {filepath} does not exist. Exiting...")
+        logger.warning(f"File path {filepath} does not exist. Exiting...")
         return None
 
     try:
         with open(filepath,encoding='utf-8') as json_file:
             data = json.load(json_file)
     except:
-        print(f"**** Error opening {filepath} ****")
-        print(traceback.format_exc())
-        print("***************")
+        logger.error(f"**** Error opening {filepath} ****",exc_info=True)
 
     return data
 
@@ -107,8 +112,7 @@ def save_json(filepath,data:dict):
         try:
             json.dump(data, json_file, indent=4,ensure_ascii=False)
         except:
-            print(f"Exception writing file {filepath}")
-            print(traceback.format_exc())
+            logger.error("Exception writing file {filepath}",exc_info=True)
 
         return None
     
@@ -121,8 +125,7 @@ def save_yaml(filepath,data:dict):
         try:
             yaml.dump(data,yaml_file,default_flow_style=False)
         except:
-            print(f"Exception writing file {filepath}")
-            print(traceback.format_exc())
+            logger.error(f"Exception writing file {filepath}",exc_info=True)
         return None    
 
 def md2toc(f:str,as_string:bool=True):
@@ -184,13 +187,13 @@ def read_file_info(fp,content=True,type_filters=[]):
         #read_exif=False
         if (not bool(type_filters)) or ("jpg" in type_filters):
             try:
-                print("\nGETTING EXIF DATA")
+                logger.debug("GETTING EXIF DATA")
                 exif_info=img_info.exiftool_read_meta_recursive(fp,debug=False)
             except Exception:
-                print("Exception reading exif files")
-                #print(traceback.format_exc())
+                logger.error("Exception reading exif files",exc_info=True)
 
-    print("\nREADING FILES")
+
+    logger.debug("READING FILES")
     # functions to decode
     for subpath,_,files in os.walk(fp):
         p_path=Path(subpath).absolute()
@@ -220,19 +223,24 @@ def read_file_info(fp,content=True,type_filters=[]):
 def print_file_info(file_info_dict):
     """ output of file information """
     for p,path_info in file_info_dict.items():
-        print(f"*** {p}")
+        logger.debug(f"*** {p}")
         file_details=path_info["file_details"]
         #print(file_details)
         for filename,filedata in file_details.items():
             content=filedata.get("content",None)
             # print(f"open \"{os.path.join(p,filename)}\"  ({type(content)})")
-            print(f"FILE \"{os.path.join(p,filename)}\"")
+            logger.debug(f"FILE \"{os.path.join(p,filename)}\"")
             if not content is None:
                 try:
-                    print(f"  =>  {str(content)}")
+                    logger.debug(f"  =>  {str(content)}")
                 except:
                     try:
-                        print(str(content).encode('utf-8').decode('cp1252','ignore'))
+                        logger.debug(str(content).encode('utf-8').decode('cp1252','ignore'))
                     except:
-                        print(str(content).encode('utf-8').decode('ascii','ignore'))
+                        logger.debug(str(content).encode('utf-8').decode('ascii','ignore'))
     return None
+
+if __name__ == "__main__":
+    loglevel = logging.INFO
+    logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
+                        level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")    
