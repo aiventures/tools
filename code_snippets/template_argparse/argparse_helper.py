@@ -1,4 +1,4 @@
-""" argparse template """
+""" argparse template  and utility for handling / converting csv, yaml, json """
 
 # https://docs.python.org/3/library/argparse.html
 import argparse
@@ -7,6 +7,7 @@ import json
 import sys
 import os
 import re
+import copy
 from enum import Enum
 from pathlib import Path
 from datetime import datetime as DateTime
@@ -141,6 +142,9 @@ class PersistenceHelper():
 
     # byte order mark indicates non standard UTF-8
     BOM = '\ufeff'
+    NUM_COL_TITLE = "num" # csv column title for number
+    ID_TITLE = "id" # column name of object header
+    TEMPLATE_DEFAULT_VALUE = "undefined" # default value for template value
 
     ALLOWED_FILE_TYPES = ["yaml","txt","json","plantuml"]
 
@@ -200,7 +204,42 @@ class PersistenceHelper():
         return d
 
     @staticmethod
-    def headerdict2list(d:dict,filter_list:list=None,header_name:str="id",column_list:list=None)->list:
+    def get_headerdict_template(keys:list,attribute_dict:dict):
+        """ creates a headerdict template from keys and attributes """
+        default = PersistenceHelper.TEMPLATE_DEFAULT_VALUE
+        out_dict = {}
+        for key in keys:
+            dict_line = {}
+            for attribute,value in attribute_dict.items():
+                if not value:
+                    value = default
+                dict_line[attribute]=value
+            out_dict[key]=dict_line
+        return out_dict
+
+    @staticmethod
+    def create_headerdict_template(f:str,headers:list,template_body:dict)->str:
+        """ creates a headerdict template and saves it """
+        template=PersistenceHelper.get_headerdict_template(headers,template_body)
+        p_file=Path(f)
+        p_suffix = p_file.suffix
+        if not p_file.is_absolute():
+            p_file = Path(os.path.join(os.getcwd(),f))
+        p_file = str(p_file)
+        if p_suffix.lower().endswith("yaml"):
+            PersistenceHelper.save_yaml(p_file,template)
+        elif p_suffix.lower().endswith("json"):
+            PersistenceHelper.save_json(p_file,template)
+        elif p_suffix.lower().endswith("csv"):
+            csv_data = PersistenceHelper.headerdict2list(template)
+            persistence_helper=PersistenceHelper(f_save=p_file)
+            persistence_helper.save(csv_data)
+        else:
+            logger.error(f"File template creation only allowed for type yaml,json,csv")
+        return p_file
+
+    @staticmethod
+    def headerdict2list(d:dict,filter_list:list=None,header_name:str=ID_TITLE,column_list:list=None)->list:
         """ linearizes a dictionary containing header and attributes
             sample_key1:
                 comment: comment 1
@@ -233,6 +272,7 @@ class PersistenceHelper():
                     break
             return passed
 
+        num_col_title = PersistenceHelper.NUM_COL_TITLE
         out_list = []
         columns=[]
         column_counts=[]
@@ -248,7 +288,7 @@ class PersistenceHelper():
             columns = list(set(keys))
             column_counts.append(len(keys))
             column_counts=list(set(column_counts))
-            line_dict = {"#":str(index).zfill(2),header_name:header}
+            line_dict = {num_col_title:str(index).zfill(2),header_name:header}
             index += 1
             for k in keys:
                 line_dict[k]=str(value_dict[k])
@@ -259,7 +299,7 @@ class PersistenceHelper():
             logger.debug(f"Different Columns present for each line, appending missing columns")
             out_list_new = []
             for line_dict in out_list:
-                out_dict_new={"#":line_dict["#"],header_name:line_dict[header_name]}
+                out_dict_new={num_col_title:line_dict[num_col_title],header_name:line_dict[header_name]}
                 for column in sorted(columns):
                     v = line_dict.get(column)
                     if v is None:
@@ -325,7 +365,7 @@ class PersistenceHelper():
         return out
 
     @staticmethod
-    def read_txt_file(filepath,encoding='utf-8',comment_marker="#",skip_blank_lines=True)->list:
+    def read_txt_file(filepath,encoding='utf-8',comment_marker="# ",skip_blank_lines=True)->list:
         """ reads data as lines from file
         """
         lines = []
@@ -340,7 +380,7 @@ class PersistenceHelper():
                             logger.warning("Line contains BOM Flag, file is special UTF-8 format with BOM")
                     if len(line.strip())==0 and skip_blank_lines:
                         continue
-                    if line[0]==comment_marker:
+                    if line.startswith(comment_marker):
                         continue
                     lines.append(line.strip())
         except:
@@ -399,7 +439,7 @@ class PersistenceHelper():
 
         with open(filepath, 'w', encoding='utf-8') as yaml_file:
             try:
-                yaml.dump(data,yaml_file,default_flow_style=False)
+                yaml.dump(data,yaml_file,default_flow_style=False,sort_keys=False)
             except:
                 logger.error(f"Exception writing file {filepath}",exc_info=True)
             return None
@@ -468,8 +508,8 @@ class PersistenceHelper():
         f_save = self.get_adjusted_filename(f_save)
         return f_save
 
-    def save(self,data,f_save:str=None)->None:
-        """ save file, optionally with path """
+    def save(self,data,f_save:str=None)->str:
+        """ save file, optionally with path, returns filename """
         f_save = self._get_save_file_name(f_save)
 
         if not f_save:
@@ -511,6 +551,7 @@ class PersistenceHelper():
             logger.warning(f"File {f_save}, no supported suffix {suffix} (allowed: {PersistenceHelper.ALLOWED_FILE_TYPES}), skip save")
             return
         logger.info(f"Saved [{suffix}] data: {f_save}")
+        return f_save
 
 class ParserHelper():
     """ Helper class for argument parsing """
@@ -641,22 +682,19 @@ class ParserHelper():
         if add_timestamp:
             self.add_arg_template(ParserTemplate.PARAM_ADD_TIMESTAMP)
 
-def get_argument_list()->list:
-    """ sample how to compile argument list """
-    arg_list=[["myvar","v",{  "default":"default","help":"help description","metavar":"<var>" } ,
-               ParserTemplate.PARAM_TEMPLATE],
-              ["myflag","f",
-               { "help":"help flag (Default False, True if set)" },
-               ParserTemplate.BOOL_TEMPLATE_TRUE]]
-    return arg_list
-
-class SampleFileTransformer():
+class FileTransformer():
     """ sample class to transform from various input to output formats """
     def __init__(self,f_read:str=None,**kwargs) -> None:
         """ original file location """
         self._persistence_helper = PersistenceHelper(f_read,**kwargs)
         self._data = None
-        self._header_filter = None
+        # used for control of csv output
+        self._header_filter = None # filtering entries
+        self._template_dict = {} # string templates to get derived field entries
+
+        self._out_fields = kwargs.get("out_fields",[]) # list of fields for export
+        self._template_dict = kwargs.get("template_dict",{}) # replacement dict for template
+        # output
         self._line_dict_list = []
 
     @property
@@ -676,18 +714,15 @@ class SampleFileTransformer():
         self._header_filter = header_filter
 
     def _modify_header_dict_list(self):
-        """ adjust fields / enrich fields, this is very specific, example for sample is shown  """
-
-        out_fields=["#","id","property1","part","url","comment","status"]
+        """ adjust fields / enrich fields, this is use case  specific, example for sample is shown  """
         # name convention: __attribute__ will be replaced by attribute attribute in field list
         REGEX_PLACEHOLDERS="__[A-Za-z_#]+__" # regex to identify placeholders
-        TEMPLATE_LIST={"url":"http://www.test/__part__/__#__"}
         out_list = []
         for line_dict in self._line_dict_list:
             line_out={}
-            for out_field in out_fields:
-                v = line_dict.get(out_field,"NOT_FOUND")
-                t = TEMPLATE_LIST.get(out_field)
+            for out_field in self._out_fields:
+                v = line_dict.get(out_field,"FIELD_NOT_FOUND")
+                t = self._template_dict.get(out_field)
                 if t:
                     placeholders = re.findall(REGEX_PLACEHOLDERS,t)
                     # replace all placeholders from values in line dict
@@ -704,19 +739,53 @@ class SampleFileTransformer():
         self._line_dict_list = out_list
         return out_list
 
-    def get_header_dict_list(self):
+    def get_list_from_header_dict(self):
         """ returns the dict list for a header dict """
         self._line_dict_list = PersistenceHelper.headerdict2list(self._data,self._header_filter)
-        self._modify_header_dict_list() # modify / enrich the list 
+        if self._out_fields:
+            self._modify_header_dict_list() # modify / enrich the list for csv output
         return self._line_dict_list
+
+    def get_header_dict_from_list(self,id_title:str=PersistenceHelper.ID_TITLE,
+                                  num_col_title:str=PersistenceHelper.NUM_COL_TITLE)->dict:
+        """ returns the header dict from a dict list """
+        out_dict = {}
+        if self._data is None:
+            logger.warning(f"Data is empty, read data before call")
+            return
+        if not isinstance(self._data,list):
+            logger.warning(f"Data stored in object is not a list, check your program")
+        for dict_line in self._data:
+            # remove index and keys
+            keys = list(dict_line.keys())
+            keys = [k for k in keys if k not in [id_title,num_col_title]]
+            # overwrite by out fields list
+            if self._out_fields:
+                keys = self._out_fields
+            line_dict = {}
+            header_key = dict_line.get(id_title)
+            if not header_key:
+                logger.warn(f"Couldn't find attribute {id_title} in dict to get header dict {dict_line}")
+            for key in keys:
+                v = dict_line.get(key)
+                if v:
+                    line_dict[key]=v
+            out_dict[header_key]=line_dict
+            logger.info(f"Added dict with key {header_key}")
+        return out_dict
+
 
     def read(self)->None:
         """ reads data """
         self._data = self._persistence_helper.read()
         return self._data
 
-    def save(self,f_save:str=None,file_type:str=None)->None:
-        """ saves data either using given file or file in class """
+    def save(self,f_save:str=None,file_type:str=None)->str:
+        """ saves data either using given file or file in class, returns filename """
+        # get the original file format so as to check for possible transformations
+        f_read = self._persistence_helper.f_read
+        original_filetype = f_read.suffix[1:]
+
         data = self._data
 
         # if file type is used get save file name based on read file name
@@ -725,17 +794,31 @@ class SampleFileTransformer():
             f_name = f_read.stem+"."+file_type
             f_save = os.path.join(f_read.parent,f_name)
 
-        # linearize the items
-        if file_type == "csv":
-            data = sample_transformer.get_header_dict_list()
+        # linearize dict item when saving as csv
+        if file_type == "csv"  and isinstance(data,dict):
+            data = self.get_list_from_header_dict()
 
-        self._persistence_helper.save(data,f_save)
+        # turn list of dicts into a dict structure to allow for saving as yaml, json
+        if file_type in ["yaml","json"] and original_filetype in ["csv"]:
+            data = self.get_header_dict_from_list()
+
+        f_saved = self._persistence_helper.save(data,f_save)
+        return f_saved
+
+def get_argument_list()->list:
+    """ sample how to compile argument list """
+    arg_list=[["myvar","v",{  "default":"default","help":"help description","metavar":"<var>" } ,
+               ParserTemplate.PARAM_TEMPLATE],
+              ["myflag","f",
+               { "help":"help flag (Default False, True if set)" },
+               ParserTemplate.BOOL_TEMPLATE_TRUE]]
+    return arg_list
 
 if __name__ == "__main__":
     parser =  ParserHelper(description="Test Description",prog="my Prog",epilog="The End")
     # handle files, in general use case it is to read a file and save a file
     arg_list = get_argument_list()
-    parser.add_arguments(arg_list,add_log_level=True,input_filetype="json",output_filetype="txt",add_timestamp=True)
+    parser.add_arguments(arg_list,add_log_level=True,input_filetype="yaml",output_filetype="csv",add_timestamp=True)
 
     # test file param, added manually
     # parser.add_file_param(is_output=True,suffix="json",params={"help":"my own help text","default":"my_own_file_name"})
@@ -743,8 +826,10 @@ if __name__ == "__main__":
 
     # all command line arguments passed as dict, get some cofnigurations
     # debug configuration by adding command string
-    config_dict = parser.parse_args("--file_in test2.csv --file_out test_out.csv".split())
-    # config_dict = parser.parse_args()
+    if False:
+        config_dict = parser.parse_args("--file_in test2.csv --file_out test_out.csv".split())
+    else:
+        config_dict = parser.parse_args()
     loglevel = config_dict.get("loglevel",LogLevel.INFO.value)
     csv_sep = config_dict.get("csv_sep",";")
     dec_sep = config_dict.get("dec_sep",",")
@@ -758,21 +843,50 @@ if __name__ == "__main__":
     logger.info(f"\nConfig:\n {json.dumps(config_dict, indent=4)}")
 
     # get the file name from configuration
-    work_dir = str(Path(__file__).parent)
-    # read sample file
-    file_in="sample.yaml"
-    os.chdir(work_dir)
-    sample_transformer = SampleFileTransformer(file_in,add_timestamp=True)
-    data = sample_transformer.read()
-    # dict_filter=[{"status":"ignore"},{"id":"key1"}]
-    dict_filter=[{"status":"ignore"}]
-    sample_transformer.header_filter = dict_filter
-    # dict_list = sample_transformer.get_header_dict_list()
-    sample_transformer.save(file_type="csv")
-    pass
+    if False: 
+        work_dir = str(Path(__file__).parent)
+        # read sample file
+        file_in="sample.yaml"
+        os.chdir(work_dir)
+
+        # control order and output fields
+        num_col_title = PersistenceHelper.NUM_COL_TITLE
+        header_id = PersistenceHelper.ID_TITLE
+        out_fields=[num_col_title,header_id,"property1","part","url","comment","status"]
+        # templates to generate new csv columns based on existing attributes
+        template_dict={"url":f"http://www.test/__part__/__{num_col_title}__"}
+        sample_transformer = FileTransformer(file_in,add_timestamp=True,out_fields=out_fields,template_dict=template_dict)
+        # dict_filter=[{"status":"ignore"},{header_id:"key1"}]
+        # ignore any input entries isth ignore status
+        dict_filter=[{"status":"ignore"}]
+        sample_transformer.header_filter = dict_filter
+        data = sample_transformer.read()
+        f_csv = sample_transformer.save(file_type="csv")
+        # try to read saved csv again and recreate yaml with header again
+        # out_fields=[]
+        # out_fields=[num_col_title,header_id,"property1","part","url","comment","status"]
+        out_fields=["property1","part","url","comment","status"]
+        out_fields=[num_col_title,header_id,"part","url","comment","status"]
+        sample_transformer_csv = FileTransformer(f_csv,add_timestamp=True,out_fields=out_fields)
+        data_csv = sample_transformer_csv.read()
+        # header_dict = sample_transformer_csv.get_header_dict_from_list()
+        # save yaml into csv again
+        sample_transformer_csv.save(file_type="json")
+
+        # creating a headerdict template
+        f = "template_test.json"
+        headers = ["header2","header1"]
+        headerdict_attributes = ["att3","att1","status"]
+        headerdict_values = ["default",None,"undefined"]
+        headerdict_template = dict(zip(headerdict_attributes,headerdict_values))
+        f_save = PersistenceHelper.create_headerdict_template("template_test.json",headers,headerdict_template)
+        f_save = PersistenceHelper.create_headerdict_template("template_test.yaml",headers,headerdict_template)
+        f_save = PersistenceHelper.create_headerdict_template("template_test.csv",headers,headerdict_template)
+
 
     if False:
         file_helper = PersistenceHelper(f_read=file_in,f_save=file_out,add_timestamp=add_timestamp)
         in_dict = file_helper.read()
         file_helper.save(in_dict)
         pass
+
