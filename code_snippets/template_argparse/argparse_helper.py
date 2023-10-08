@@ -7,7 +7,6 @@ import json
 import sys
 import os
 import re
-import copy
 from enum import Enum
 from pathlib import Path
 from datetime import datetime as DateTime
@@ -15,6 +14,14 @@ import yaml
 from yaml import CLoader
 
 logger = logging.getLogger(__name__)
+
+class Status(Enum):
+    """ genric status """
+    UNKNOWN = "unknown"
+    IN_PROCESS = "in_process"
+    NOT_RELEVANT = "not_relevant"
+    DONE = "done"
+    IGNORE = "ignore"
 
 class LogLevel(Enum):
     """ loglevel handling """
@@ -118,7 +125,6 @@ class ParserTemplate(Enum):
         template_dict = ParserTemplate[template.name].value.copy()
         # copy over dest value for flag arguments
         try:
-            template_dict["dest"]
             template_dict["dest"]=arg_long
             #arg_is_flag = True
         except KeyError:
@@ -183,6 +189,16 @@ class PersistenceHelper():
             return None
 
     @staticmethod
+    def replace_file_suffix(f_name:str,new_suffix:str):
+        """ Replaces file suffix """
+        p_file = Path(f_name)
+        suffix = p_file.suffix
+        if suffix:
+            return f_name.replace(suffix,"."+new_suffix)
+        else:
+            return f_name+"."+new_suffix
+
+    @staticmethod
     def dict_stringify(d:dict)->dict:
         """ converts a dict with objects to stringified dict (for json) """
         for k, v in d.copy().items():
@@ -236,6 +252,7 @@ class PersistenceHelper():
             persistence_helper.save(csv_data)
         else:
             logger.error(f"File template creation only allowed for type yaml,json,csv")
+        logger.info(f"Created Template file {p_file}")
         return p_file
 
     @staticmethod
@@ -646,12 +663,12 @@ class ParserHelper():
         return (args,kwargs)
 
     def add_arguments(self,arg_list:list,
-                      input_filetype:str="json",
+                      input_filetype:str="yaml",
                       output_filetype:str=None,
                       add_log_level:bool=True,
                       add_csv_separator:bool=True,
                       add_decimal_separator:bool=True,
-                      add_timestamp:bool=False)->None:
+                      add_timestamp:bool=True)->None:
         """ multiple inserts of arguments, each entry needs to conform to the schema
             [long_shortcut(str),short_shortcut(str),argument_dict(dict),ParserTemplate(ParserTemplate)]
             Optionally create argument templates for logging level, input file and output file
@@ -684,6 +701,9 @@ class ParserHelper():
 
 class FileTransformer():
     """ sample class to transform from various input to output formats """
+    OUT_FIELDS = "out_fields"
+    TEMPLATE_DICT = "template_dict"
+
     def __init__(self,f_read:str=None,**kwargs) -> None:
         """ original file location """
         self._persistence_helper = PersistenceHelper(f_read,**kwargs)
@@ -692,8 +712,8 @@ class FileTransformer():
         self._header_filter = None # filtering entries
         self._template_dict = {} # string templates to get derived field entries
 
-        self._out_fields = kwargs.get("out_fields",[]) # list of fields for export
-        self._template_dict = kwargs.get("template_dict",{}) # replacement dict for template
+        self._out_fields = kwargs.get(FileTransformer.OUT_FIELDS,[]) # list of fields for export
+        self._template_dict = kwargs.get(FileTransformer.TEMPLATE_DICT,{}) # replacement dict for template
         # output
         self._line_dict_list = []
 
@@ -716,7 +736,7 @@ class FileTransformer():
     def _modify_header_dict_list(self):
         """ adjust fields / enrich fields, this is use case  specific, example for sample is shown  """
         # name convention: __attribute__ will be replaced by attribute attribute in field list
-        REGEX_PLACEHOLDERS="__[A-Za-z_#]+__" # regex to identify placeholders
+        REGEX_PLACEHOLDERS="__[A-Za-z_#0-9]+__" # regex to identify placeholders
         out_list = []
         for line_dict in self._line_dict_list:
             line_out={}
@@ -751,10 +771,10 @@ class FileTransformer():
         """ returns the header dict from a dict list """
         out_dict = {}
         if self._data is None:
-            logger.warning(f"Data is empty, read data before call")
+            logger.warning("Data is empty, read data before call")
             return
         if not isinstance(self._data,list):
-            logger.warning(f"Data stored in object is not a list, check your program")
+            logger.warning("Data stored in object is not a list, check your program")
         for dict_line in self._data:
             # remove index and keys
             keys = list(dict_line.keys())
@@ -765,7 +785,7 @@ class FileTransformer():
             line_dict = {}
             header_key = dict_line.get(id_title)
             if not header_key:
-                logger.warn(f"Couldn't find attribute {id_title} in dict to get header dict {dict_line}")
+                logger.warning(f"Couldn't find attribute {id_title} in dict to get header dict {dict_line}")
             for key in keys:
                 v = dict_line.get(key)
                 if v:
@@ -843,7 +863,7 @@ if __name__ == "__main__":
     logger.info(f"\nConfig:\n {json.dumps(config_dict, indent=4)}")
 
     # get the file name from configuration
-    if False: 
+    if False:
         work_dir = str(Path(__file__).parent)
         # read sample file
         file_in="sample.yaml"
