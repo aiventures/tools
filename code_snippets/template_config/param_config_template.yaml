@@ -1,0 +1,120 @@
+# sample param_config rename to param_config.yaml and set the 
+# configpath.py pointing to file location of this file 
+# sample block for executables
+executables:
+  vscode:
+    link: "xyz"
+    description: "short help text goes here"
+  cygwin:
+    link: "xyz"
+    description: "short help text goes here"
+# sample block for scripts
+scripts:
+  bat1:
+    link: "xyz"
+    description: "short help text goes here"
+# sample block for scripts bash
+scripts_bash:
+  bat1:
+    link: "xyz"
+    description: "short help text goes here"    
+# sample block for folder paths    
+paths:
+  work_folder:
+    path:"xyt"
+    description:"xdrf"
+# sample block for document links
+documents:
+  howto:
+    link: "xyz"
+    path: "optional, relative to paths or absolute"
+    description: "description"
+# sample block for environment variables for win cmd
+environment_win:
+  howto:
+    value: "xyz"
+    path: "optional"
+    description: "description"
+# sample block for command line shortcuts:
+# refers to elements in
+# scripts, executables, documents section above
+shortcuts:
+  cygwin:
+    executable: cygwin
+    description: "Display Path: -d -a [<filename>]/-p <.|path>"
+  bat1:
+    script: bat1
+    description: "Display Path: -d -a [<filename>]/-p <.|path>"
+  my_doc:
+    document: howto
+    description: "this is my knowledge collection"
+# SAMPLE BLOCK for INPUT PARAMS USED FOR COMMAND LINE
+cmd_params:
+  # default params to be used frequently
+  cmdparams_default:
+    file:
+      param_short: f
+      param: file
+      default: null
+      help: "Input File"
+      metavar: "[file]"  
+    file_out:
+      param_short: fo
+      param: file_out
+      default: null
+      help: "Output File"
+      metavar: "[file_out]"        
+    csv_separator:
+      param_short: csep
+      param: csv_sep
+      default: ";"
+      help: "CSV separator, default is ';'"
+      metavar: "[;]"
+    decimal_separator:
+      param_short: dsep
+      param: dec_sep
+      default: ","
+      help: "decimal spearator, default is ','"
+      metavar: "[,]"
+    loglevel:
+      param_short: ll
+      param: loglevel
+      default: info
+      choices: ["debug","info","warning","error"]
+      help: "Set loglevel (debug,info,warning,error)"
+      metavar: "[loglevel]"      
+    add_timestamp:
+      param_short: ts
+      param: add_timestamp
+      dest: add_timestamp
+      action: "store_true"
+      help: "Help Comment True"      
+
+  # parameters to be used as copy paste templates
+  cmdparams_template:
+    # sample block for param input
+    sample_param:
+      param_short: ps
+      param: param_short
+      default: null
+      help: "Help Comment"
+      metavar: "[param_short]"
+    # sample block for true boolean
+    sample_bool_true:
+      param_short: sbt
+      param: sbtrue
+      dest: sbtrue
+      action: "store_true"
+      help: "Help Comment True"
+    # sample block for false boolean
+    sample_bool_false:
+      param_short: sbf
+      param: sbfalse
+      dest: sbfalse
+      action: "store_false"
+      help: "Help Comment False"
+
+
+
+
+

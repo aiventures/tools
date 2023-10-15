@@ -116,6 +116,24 @@ class ParserTemplate(Enum):
                             "help":"add timestamp to filename",
                             "args": ["--add_timestamp","-as"]
                            }
+    @staticmethod
+    def get_value(name:str)->dict:
+        """ returns a template if found """
+        out = None
+        try:
+            enum_value = ParserTemplate[name]
+            out = enum_value.value
+        except ValueError:
+            logger.error(f"Couldn't find Enum for key {name}")
+        return out
+    
+    @staticmethod
+    def as_dict()->dict:
+        """ gets enum as dict """
+        out = {}
+        for enum_item in iter(ParserTemplate):
+            out[enum_item.name]=enum_item.value
+        return out
 
     @staticmethod
     def get_parser_arguments(template,arg_long:str,arg_short:str,params:dict)->dict:
@@ -251,7 +269,7 @@ class PersistenceHelper():
             persistence_helper=PersistenceHelper(f_save=p_file)
             persistence_helper.save(csv_data)
         else:
-            logger.error(f"File template creation only allowed for type yaml,json,csv")
+            logger.error("File template creation only allowed for type yaml,json,csv")
         logger.info(f"Created Template file {p_file}")
         return p_file
 
@@ -313,7 +331,7 @@ class PersistenceHelper():
 
         logger.debug(f"Created {len(out_list)} entries, columns {columns}")
         if len(column_counts) > 1:
-            logger.debug(f"Different Columns present for each line, appending missing columns")
+            logger.debug("Different Columns present for each line, appending missing columns")
             out_list_new = []
             for line_dict in out_list:
                 out_dict_new={num_col_title:line_dict[num_col_title],header_name:line_dict[header_name]}
@@ -595,7 +613,6 @@ class ParserHelper():
         loglevel = self._args_dict.get("loglevel")
         if loglevel:
             self._args_dict["loglevel"] = LogLevel.get(loglevel)
-
         return self._args_dict
 
     def add_arg_template(self,parser_template:Enum)->set:

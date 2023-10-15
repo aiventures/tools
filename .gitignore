@@ -39,3 +39,5 @@ uml_component.png
 health_data.py
 *.log
 *_local.py
+code_snippets/template_config/configpath.py
+code_snippets/template_config/param_config.yaml
