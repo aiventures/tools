@@ -38,6 +38,10 @@ uml_component.png
 .ipynb_checkpoints/
 health_data.py
 *.log
-*_local.py
-code_snippets/template_config/configpath.py
-code_snippets/template_config/param_config.yaml
+*_local.*
+*_tmp.*
+*_old.*
+configpath.py
+v.bat
+param_config.yaml
+code_snippets/template_config/test_subparser_local,py

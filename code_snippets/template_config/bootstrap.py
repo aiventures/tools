@@ -7,6 +7,8 @@ import json
 from enum import Enum
 from pathlib import Path
 from datetime import datetime as DateTime
+import shlex
+import subprocess
 import argparse
 import yaml
 from yaml import CLoader
@@ -27,6 +29,7 @@ class CONFIG(Enum):
     ENVIRONMENT_WIN = "Environment Variables (SET) for Windows Command Line"
     SHORTCUTS = "shortcut to any of the configuration elements above"
     CMD_PARAMS = "Command Line Parameters for any template scripts"
+    CMD_SUBPARSERS = "Definition of Subparser Configuration"
 
 class LOGLEVEL(Enum):
     """ loglevel handling """
@@ -35,7 +38,7 @@ class LOGLEVEL(Enum):
     INFO = logging.INFO
     WARNING = logging.WARNING
     ERROR = logging.ERROR
-    FATAL = logging.FATAL    
+    FATAL = logging.FATAL
 
 class PARSER_ATTRIBUTE(Enum):
     """ Configuration, each param is modeled as a dictionary """
@@ -111,6 +114,58 @@ class EnumHelper():
         for k in keys:
             if k in enum_keys:
                 out.append(enum_dict[k])
+        return out
+
+class CmdRunner():
+    """ Cnd Runner: Runs OS Commands locally """
+
+    def __init__(self,cwd:str=None) -> None:
+        """ constructor """
+        self._output=None
+        self._return_code=0
+        if not cwd:
+            cwd = os.getcwd()
+        if not os.path.isdir(cwd):
+            logger.error(f"{cwd} is not a path, check input")
+        self._cwd = os.path.abspath(cwd)
+
+    def run_cmd(self,os_cmd:str):
+        """ runs command line command """
+        oscmd_shlex=shlex.split(os_cmd)
+        # special case: output contains keywords (in this case its displaying a logfile)
+        self._output=[]
+        self._return_code=0
+        try:
+            # encoding for german umlauts
+            with subprocess.Popen(oscmd_shlex, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    errors='ignore',universal_newlines=True,encoding="utf8",cwd=self._cwd) as popen:
+                for line in popen.stdout:
+                    self._output.append(line)
+                    line=line.replace("\n","")
+                    logger.info(line)
+
+            # popen.stdout.close()
+            if popen.stderr:
+                logger.error(f"ERROR OCCURED: {popen.stderr}")
+
+            self._return_code = popen.returncode
+            if self._return_code:
+                raise subprocess.CalledProcessError(self._return_code, os_cmd)
+        except subprocess.CalledProcessError as e:
+            self._return_code=1
+            logger.error(f"EXCEPTION OCCURED {e}, command {os_cmd}")
+        return self._return_code
+
+    def get_output(self,as_string=True):
+        """ Returns output from last command
+        Args:
+            as_string (bool, optional): if True, output string list will be concatenated. Defaults to True.
+        Returns:
+            string/list: single output strings as list or concatenated string
+        """
+        out=self._output
+        if as_string and isinstance(out,list):
+            out = "".join([l.strip() for l in out])
         return out
 
 class PersistenceHelper():
@@ -422,7 +477,6 @@ class PersistenceHelper():
     def save_yaml(filepath,data:dict)->None:
         """ Saves dictionary data as UTF8 yaml"""
         # encode date time and other objects in dict see
-        # https://stackoverflow.com/questions/11875770/how-to-overcome-datetime-datetime-not-json-serializable
 
         with open(filepath, 'w', encoding='utf-8') as yaml_file:
             try:
@@ -543,14 +597,18 @@ class PersistenceHelper():
 class Config():
     """ handles configuration """
 
-    def __init__(self,f_config:str=None,params_template:str=None,
-                 default_params:list=None,**kwargs) -> None:
+    def __init__(self,f_config:str=None,
+                 params_template:str=None,
+                 subparser_template:str=None,
+                 default_params:list=None,
+                 **kwargs) -> None:
         """ constructor """
         if not os.path.isfile(f_config):
             logger.warning(f"{f_config} is missing as Config File, skip")
             return
         self._config_dict = PersistenceHelper.read_yaml(f_config)
-        self._argparser = ParseHelper(self,params_template,default_params,**kwargs)
+        self._argparser = ParseHelper(self,params_template,subparser_template,
+                                      default_params,**kwargs)
 
     def get_config(self,config_key:Enum=None):
         """ gets the respective config area, should match to enum in CONFIG """
@@ -560,9 +618,10 @@ class Config():
         except (KeyError, AttributeError):
             logger.error(f"Config Key {config_key} doesn't match to CONFIG enums")
             return {}
-    
+
     @property
     def argparser(self):
+        """ return the argparser """
         return self._argparser
 
 class ParseHelper():
@@ -574,17 +633,15 @@ class ParseHelper():
 
     def __init__(self,config:Config,
                  params_template:str=None,
+                 subparser_template:str=None,
                  params_default:list=None,
                  **kwargs) -> None:
         """ constuctor, uses the params dict from config file """
         self._params_template=params_template
+        self._subparser_template=subparser_template
         self._config = config
-        self._arguments = []
         self._cmd_params_dict = config.get_config(CONFIG.CMD_PARAMS)
-        # add additional params from default input args
-        self._add_default_params_filters(params_default)        
-        # add params from the template
-        self._add_args_dict(params_template)
+        self._cmd_subparser_dict = config.get_config(CONFIG.CMD_SUBPARSERS)
 
         # check for any additonal valiues relevant for configuration
         parse_args = {}
@@ -593,56 +650,98 @@ class ParseHelper():
             parse_args[PARSER_ATTRIBUTE.PROG.value]=prog
         desc = kwargs.get(PARSER_ATTRIBUTE.DESCRIPTION.value)
         if desc:
-            parse_args[PARSER_ATTRIBUTE.DESCRIPTION.value]=desc        
+            parse_args[PARSER_ATTRIBUTE.DESCRIPTION.value]=desc
         epilog = kwargs.get(PARSER_ATTRIBUTE.EPILOG.value)
         if epilog:
             parse_args[PARSER_ATTRIBUTE.EPILOG.value]=epilog
-        parse_args = {}            
-        self._parser = argparse.ArgumentParser(**parse_args)
-        self._add_arguments()
-    
-    def _add_arguments(self):
-        """ adds arguments to parser """        
-        for arg in self._arguments:
+        self._main_parser = argparse.ArgumentParser(**parse_args)
+        # add additional params from default input args
+        default_arguments = self._get_default_params_filters(params_default)
+        if default_arguments:
+            self._add_arguments(self._main_parser,default_arguments)
+        # add without subparser arguments / valid for main argparser
+        if self._params_template is not None:
+            self._add_template()
+        # add any subparsers
+        if self._subparser_template is not None:
+            self._add_subparser_template()
+        else:
+            logger.error("no parser or subparser was submitted, check settings")
+            return
+
+    def _add_template(self):
+        """ adding a single template to parser """
+        # add params from the template
+        arguments = self._get_args_dict(self._params_template)
+        self._add_arguments(self._main_parser,arguments)
+
+    def _add_subparser_template(self):
+        """ add subparser template """
+        subparser_template_dict=self._cmd_subparser_dict.get(self._subparser_template)
+        if subparser_template_dict is None:
+            logger.error(f"Coulddn't find Subparser Template in cmd_subparsers > {self._subparser_template}")
+            return None
+        subparsers = self._main_parser.add_subparsers(dest="command")
+        for subcommand,parse_template in subparser_template_dict.items():
+            logger.info(f"Subparser Template {self._subparser_template}, subcommand {subcommand}, parse template {parse_template}")
+            arguments = self._get_args_dict(parse_template)
+            if arguments is None:
+                logger.warning(f"Couldn't find args template {parse_template}")
+                continue
+            help = self._cmd_params_dict[parse_template].get(PARSER_ATTRIBUTE.HELP.value,"no help available")
+            subparser = subparsers.add_parser(subcommand,help=help)
+            self._add_arguments(subparser,arguments)
+
+    def _add_arguments(self,parser,arguments):
+        """ adds arguments to parser """
+        for arg in arguments:
             args = arg[ParseHelper.ARGS]
             kwargs = arg[ParseHelper.KWARGS]
-            self._parser.add_argument(*args,**kwargs)
+            parser.add_argument(*args,**kwargs)
             default = arg.get(ParseHelper.DEFAULT)
             if default:
-                self._parser.set_defaults(**default)
+                parser.set_defaults(**default)
 
-
-    def _add_default_params_filters(self,params_default:list)->None:
+    def _get_default_params_filters(self,params_default:list)->None:
         """ get list of argparse default arguments from Enum List """
-        # check for existing default params 
+        # check for existing default params
         cmdparams_default = ParseHelper.CMDPARAMS_DEFAULT
         cmdparams_default_dict = self._cmd_params_dict.get(cmdparams_default)
         if cmdparams_default_dict is None:
             logger.warning("Config Yaml seems to not cotnain cmd_params > cmdparams_default section, check")
             return
         default_params_keys = list(cmdparams_default_dict.keys())
+        if params_default is None:
+            logger.warning("No default param list was submitted, pls check")
+            return None
 
         params_filter = [p.value for p in params_default if p.value in default_params_keys]
         if len(params_filter) == 0:
             params_filter = None
-        self._add_args_dict(cmdparams_default,params_filter)
+        arguments = self._get_args_dict(cmdparams_default,params_filter)
+        return arguments
 
-    def _add_args_dict(self,params_template:str,filter:list=None)->None:
+    def _get_args_dict(self,params_template:str,args_filter:list=None)->list:
         """ creates argparse list, if filter is supplied, only
             generate parse arguments for specified filters
         """
         c = ParseHelper
+        help = ""
         arguments=[]
         parse_args_dict = self._cmd_params_dict.get(params_template)
         if not parse_args_dict:
             logger.error(f"There is no cmd_params configuration named {params_template}, check")
             return
-        if filter is None:
-            filter = list(parse_args_dict.keys())
+        if args_filter is None:
+            args_filter = list(parse_args_dict.keys())
         logger.info(f"Read ArgParse Config {params_template}")
 
         for param,params_dict in parse_args_dict.items():
-            if not param in filter:
+            if param == PARSER_ATTRIBUTE.HELP.value:
+                logger.info(f"Params Template {params_template} ({params_dict})")
+                help = params_dict
+                continue
+            if not param in args_filter:
                 continue
             param_name = params_dict.get(PARSER_ATTRIBUTE.PARAM.value)
             params_copy = params_dict.copy()
@@ -659,13 +758,13 @@ class ParseHelper():
                 elif action == PARSER_ATTRIBUTE.STORE_TRUE.value:
                     default = {param_name:False}
             arguments.append({c.ARGS:args,c.KWARGS:kwargs,c.DEFAULT:default})
-        self._arguments.extend(arguments)
-        logger.info(f"Numbe of ParseArg arguments {len(self._arguments)} ")
+        logger.info(f"Number of ParseArg arguments {len(arguments)} ")
+        return arguments
 
     def parse_args(self,*testargs)->dict:
         """ get parsed results, additional args value can be used for debugging """
-        args_dict = vars(self._parser.parse_args(*testargs))
-        return args_dict        
+        args_dict = vars(self._main_parser.parse_args(*testargs))
+        return args_dict
 
 class Runner():
     """ bundling of File Transformer Properties for parsing """
@@ -675,6 +774,7 @@ class Runner():
 
     def __init__(self,f_config:str=None,
                  params_template:str=None,
+                 subparser_template:str=None,
                  default_params:list=None,**kwargs) -> None:
         """ Constructor """
         self._path = Path(__file__)
@@ -683,7 +783,8 @@ class Runner():
         # argparse handling
         self._read_config(f_config)
         # get the Configuration from a yaml file
-        self._config = Config(self._f_config,params_template,default_params,**kwargs)        
+        self._config = Config(self._f_config,params_template,
+                              subparser_template,default_params,**kwargs)
 
     def _get_file(self,f:str,)->str:
         """ trys to locate a file """
@@ -707,33 +808,47 @@ class Runner():
         self._f_config = f_config
         if self._f_config is None:
             return
-    
+
     @property
     def config(self):
+        """ cofnig getter method """
         return self._config
 
 if __name__ == "__main__":
-    # location of config file 
-    # copy the configpath_template, supply path and 
+    # location of config file
+    # copy the configpath_template, supply path and
     # set the path pointing to the param_config.yaml file
     f_config = CONFIG_PATH
     # get the argparseconfig from the yaml template file
-    params_template = "cmdparams_template"
+    params_template = None
+    subparser_template = None
+    if False: 
+        params_template = "cmdparams_template"
+    elif False:
+        # alternatively use subparser template or you may use both
+        # if the commands do not have a conflict
+        subparser_template = "subparser_sample_config"    
     # additional parameters (as defined in
     # cmd_params > cmdparams_default / or via Enum Definition)
+    # these params are always added to main arg parser
     pa = DEFAULT_PARSER_ATTRIBUTES
     default_params = [pa.ADD_TIMESTAMP,pa.LOGLEVEL]
     # additional parameters that may be used
     kwargs = { PARSER_ATTRIBUTE.DESCRIPTION.value: "Description", # Argparse add. Description
                PARSER_ATTRIBUTE.PROG.value: "PROPG", # Used in Argparse description
-               PARSER_ATTRIBUTE.EPILOG.value: "EPILOG DESCRIPTION"             
+               PARSER_ATTRIBUTE.EPILOG.value: "EPILOG DESCRIPTION"
              }
-    runner = Runner(f_config,params_template,default_params,**kwargs)
-    # get the argparser 
+    runner = Runner(f_config,params_template, subparser_template,
+                    default_params,**kwargs)
+
+    # get the argparser
     argparser = runner.config.argparser
     # testargs
-    if True:
+    # sample for params template
+    if params_template:
         config_dict = argparser.parse_args("--sbtrue -ll debug".split())
+    elif subparser_template:
+        config_dict = argparser.parse_args("subparse_cmd -ps xyz".split())
     else:
         config_dict = argparser.parse_args()
 
@@ -744,7 +859,7 @@ if __name__ == "__main__":
 
     # show config
     logger.info(f"\nConfig:\n {json.dumps(config_dict, indent=4)}")
-    
+
     # main(**config_dict)
     # EnumHelper.as_dict(CONFIG)
     value = EnumHelper.keys(PARSER_ATTRIBUTE)

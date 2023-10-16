@@ -52,6 +52,7 @@ shortcuts:
 cmd_params:
   # default params to be used frequently
   cmdparams_default:
+    help: "often used default parameters"
     file:
       param_short: f
       param: file
@@ -92,6 +93,7 @@ cmd_params:
 
   # parameters to be used as copy paste templates
   cmdparams_template:
+    help: "description of the cmdparams template"
     # sample block for param input
     sample_param:
       param_short: ps
@@ -113,6 +115,15 @@ cmd_params:
       dest: sbfalse
       action: "store_false"
       help: "Help Comment False"
+# subparser structures
+cmd_subparsers:
+  # this is the subparser config name 
+  subparser_sample_config:      
+    # the keys correspond to the first subparam, 
+    # (which will be used as (sub)command)
+    # values must match the cmdparams key
+    # if there is a help in the params template it will be used
+    subparse_cmd: cmdparams_template
 
 
 
