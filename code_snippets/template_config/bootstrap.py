@@ -15,22 +15,39 @@ import yaml
 from yaml import CLoader
 
 # hide the config path import the path ref as variable
-from configpath import CONFIG_PATH
+# from configpath import CONFIG_PATH
+from tools.code_snippets.template_config.configpath import CONFIG_PATH
 
 logger = logging.getLogger(__name__)
 config_dict = {}
 
 class CONFIG(Enum):
     """ CONFIG FILE MAIN CATEGORIES DEFINITION  """
-    EXECUTABLES = "Links to Executable Programs "
-    SCRIPTS = "Links to Win Scripts like shell scripts, bat files"
-    SCRIPTS_BASH = "Links to Bash Scripts"
-    PATHS = "Links to frequently used Paths "
-    DOCUMENTS = "Lnks to frequently accessed documents"
+    EXECUTABLE = "Executable Programs (absolute or filename only)"
+    PATTERN = "Generating Commands based on Patterns"
+    PATH = "Links to frequently used Paths"
+    FILE = "Links to frequently used Files"
+    SCRIPT = "Links to Win Scripts like shell scripts, bat files"
+    SCRIPT_BASH = "Links to Bash Scripts"
     ENVIRONMENT_WIN = "Environment Variables (SET) for Windows Command Line"
-    SHORTCUTS = "shortcut to any of the configuration elements above"
-    CMD_PARAMS = "Command Line Parameters for any template scripts"
-    CMD_SUBPARSERS = "Definition of Subparser Configuration"
+    ENVIRONMENT_BASH = "Environment Variables (SET) for Bash Command Line"
+    SHORTCUT = "Shortcut to any of the configuration elements above"
+    CMD_PARAM = "Command Line Parameters for any template scripts"
+    CMD_SUBPARSER = "Definition of Subparser Configuration"
+
+class CONFIG_ATTRIBUTE(Enum):
+    """ available config fields """
+    EXECUTABLE = "Executable Programs (absolute or filename only)"
+    PATH = "Path (absolute or pointing to one in Path segment)"
+    REFERENCE = "Configuration Reference (when using Path Pointing to COnfig)"
+    FILE = "Filename (absolute or pointing to one in Path segment)"
+    HELP = "Short Documentation"
+    PATTERN = "String Pattern to Be Evaluated"
+    TYPE = "Parameter Type"
+    PARAM = "Parameter"
+    VALUE = "Value attrubute (for example for Env Variables)"
+    RESOLVED_PATH_REF = "Resolved Path Reference"
+    RESOLVED_FILE_REF = "Resolved File Reference"
 
 class LOGLEVEL(Enum):
     """ loglevel handling """
@@ -79,26 +96,53 @@ class EnumHelper():
         return out
 
     @staticmethod
-    def keys(enum_class:Enum,lower:bool=False,upper:bool=False)->list:
-        """ get names as list (optionally as lowercase / uppercase) """
+    def keys(enum_class:Enum,lower:bool=False,upper:bool=False,
+             as_dict:bool=False)->list:
+        """ get names as list (optionally as lowercase / uppercase)
+            if as_dict is set, original key from enum is returned
+        """
         enum_dict = EnumHelper.as_dict(enum_class)
         keys = list(enum_dict.keys())
-        if lower:
-            keys = [k.lower() for k in keys]
-        elif upper:
-            keys = [k.upper() for k in keys]
-        return keys
+        keys_dict = dict(zip(keys,keys))
+        for k,v in keys_dict.items():
+            if lower:
+                v = v.lower()
+            elif upper:
+                v = v.upper()
+            keys_dict[k]=v
+        if as_dict:
+            return keys_dict
+        else:
+            return list(keys_dict.values())
 
     @staticmethod
-    def get_value(enum_class:Enum,name:str)->dict:
-        """ returns enum value if keys found """
-        out = None
-        try:
-            enum_value = enum_class[name]
-            out = enum_value.value
-        except KeyError:
-            logger.error(f"Couldn't find Enum Value in Enum {enum_class.__name__}, key {name}")
-        return out
+    def key(enum_key:Enum,lower:bool=True,upper:bool=False)->dict:
+        """ returns enum value if keys found returns original value"""
+        name =  enum_key.name
+        if lower:
+            name = name.lower()
+        elif upper:
+            name = name.upper()
+        return name
+
+    @staticmethod
+    def enum(enum_class:Enum,key,ignore_case:bool=True):
+        """ Tries to get an enum from an enum key (str or enum) """
+        key_s = key
+        if isinstance(key,Enum):
+            key_s = key.name
+        out_enum = None
+        enum_keys = EnumHelper.keys(enum_class)
+        if key_s in enum_keys:
+            out_enum = enum_class[key_s]
+        # check if keys are in alt
+        elif ignore_case:
+            for k in enum_keys:
+                if key_s.lower() == k.lower():
+                    out_enum = enum_class[k]
+                    break
+        return out_enum
+
 
     @staticmethod
     def get_values_from_keys(enum_class:Enum,keys:list,ignorecase:bool=True):
@@ -132,6 +176,7 @@ class CmdRunner():
 
     def run_cmd(self,os_cmd:str):
         """ runs command line command """
+        logger.info(f"run command [{os_cmd}]")
         oscmd_shlex=shlex.split(os_cmd)
         # special case: output contains keywords (in this case its displaying a logfile)
         self._output=[]
@@ -630,7 +675,7 @@ class ParseHelper():
     DEFAULT = "default"
     ARGS =  "args"
     KWARGS = "kwargs"
-    CMDPARAMS_DEFAULT = "cmdparams_default"
+    CMDPARAM_DEFAULT = "cmdparam_default"
 
     def __init__(self,config:Config,
                  params_template:str=None,
@@ -641,8 +686,8 @@ class ParseHelper():
         self._params_template=params_template
         self._subparser_template=subparser_template
         self._config = config
-        self._cmd_params_dict = config.get_config(CONFIG.CMD_PARAMS)
-        self._cmd_subparser_dict = config.get_config(CONFIG.CMD_SUBPARSERS)
+        self._cmd_params_dict = config.get_config(CONFIG.CMD_PARAM)
+        self._cmd_subparser_dict = config.get_config(CONFIG.CMD_SUBPARSER)
 
         # check for any additonal valiues relevant for configuration
         parse_args = {}
@@ -689,8 +734,8 @@ class ParseHelper():
             if arguments is None:
                 logger.warning(f"Couldn't find args template {parse_template}")
                 continue
-            help = self._cmd_params_dict[parse_template].get(PARSER_ATTRIBUTE.HELP.value,"no help available")
-            subparser = subparsers.add_parser(subcommand,help=help)
+            help_arg = self._cmd_params_dict[parse_template].get(PARSER_ATTRIBUTE.HELP.value,"no help available")
+            subparser = subparsers.add_parser(subcommand,help=help_arg)
             self._add_arguments(subparser,arguments)
 
     def _add_arguments(self,parser,arguments):
@@ -706,7 +751,7 @@ class ParseHelper():
     def _get_default_params_filters(self,params_default:list)->None:
         """ get list of argparse default arguments from Enum List """
         # check for existing default params
-        cmdparams_default = ParseHelper.CMDPARAMS_DEFAULT
+        cmdparams_default = ParseHelper.CMDPARAM_DEFAULT
         cmdparams_default_dict = self._cmd_params_dict.get(cmdparams_default)
         if cmdparams_default_dict is None:
             logger.warning("Config Yaml seems to not cotnain cmd_params > cmdparams_default section, check")
@@ -727,7 +772,6 @@ class ParseHelper():
             generate parse arguments for specified filters
         """
         c = ParseHelper
-        help = ""
         arguments=[]
         parse_args_dict = self._cmd_params_dict.get(params_template)
         if not parse_args_dict:
@@ -740,7 +784,7 @@ class ParseHelper():
         for param,params_dict in parse_args_dict.items():
             if param == PARSER_ATTRIBUTE.HELP.value:
                 logger.info(f"Params Template {params_template} ({params_dict})")
-                help = params_dict
+                help_arg = params_dict
                 continue
             if not param in args_filter:
                 continue
@@ -823,12 +867,12 @@ if __name__ == "__main__":
     # get the argparseconfig from the yaml template file
     params_template = None
     subparser_template = None
-    if False: 
-        params_template = "cmdparams_template"
+    if True:
+        params_template = "cmdparam_template"
     elif False:
         # alternatively use subparser template or you may use both
         # if the commands do not have a conflict
-        subparser_template = "subparser_sample_config"    
+        subparser_template = "subparser_sample_config"
     # additional parameters (as defined in
     # cmd_params > cmdparams_default / or via Enum Definition)
     # these params are always added to main arg parser
