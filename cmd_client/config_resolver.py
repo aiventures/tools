@@ -520,8 +520,12 @@ class ConfigResolver():
                     is_file_type = True
             # wrap os objects in quotes
             if is_file_type:
+                # wrap in quotes, do not do this in case we already have quotes in the pattern 
                 logger.debug(f"Adding quotes for param {param_name} (file type)")
-                param_value='"'+param_value+'"'
+                re_quotes=r"\"{\["+param_name
+                has_quotes=re.findall(re_quotes,pattern)
+                if not has_quotes:
+                    param_value='"'+param_value+'"'
             params_dict[param_name]=param_value
 
         filled_pattern = ConfigResolver.get_filled_pattern(pattern,**params_dict)

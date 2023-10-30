@@ -117,10 +117,13 @@ if __name__ == "__main__":
     if test_mode:
         parsed_args_main = argparser.parse_args("-ps testparant".split())
         parsed_args_main = argparser.parse_args("--cc_report".split())
-        parsed_args_subparser = argparser.parse_args("npp -f xyz".split())
+        # test notepadplusplus
+        # parsed_args_subparser = argparser.parse_args("npp -f xyz".split())
+        # test vscode
+        parsed_args_subparser = argparser.parse_args("vs -f xyz -l 10".split())
         loglevel = C.LOGLEVEL[parsed_args_main.get("loglevel","DEBUG").upper()].value
-        parsed_args = parsed_args_main
         # parsed_args = parsed_args_main
+        parsed_args = parsed_args_subparser
     else:
         parsed_args = argparser.parse_args()
         loglevel = C.LOGLEVEL[parsed_args.get("loglevel","DEBUG").upper()].value
