@@ -84,17 +84,25 @@ class Runner():
                         default_params,**kwargs)
         return runner
 
-    def get_cmd(self,parsed_args)->str:
+    def run_cmd(self,parsed_args)->str:
         """ returns the os command """
-        cmd_dict = self._config.get_cmd(parsed_args)
+        commands = self._config.get_cmd(parsed_args)
+        cmd_dict = commands.get(C.PATTERN_KEY)
+        action_dict = commands.get(C.ACTION_KEY)
+        if action_dict:
+            num_actions = len(action_dict)            
+            logger.info(f"Retrieved ({num_actions}) Actions {list(action_dict.keys())}")            
+            self._config.run_actions(action_dict,**parsed_args)
+        else:
+            logger.info("No actions")            
 
+        cmds = None
         if cmd_dict:
             num_cmds = len(cmd_dict)
             cmds = list(cmd_dict.values())
             logger.info(f"Retrieved ({num_cmds}) Commands {list(cmd_dict.keys())}")
         else:
-            logger.warning("No commands found")
-            return None
+            logger.info("No commands Derived")        
 
         if isinstance(cmds,list):
             if len(cmds)>1:
@@ -108,9 +116,10 @@ if __name__ == "__main__":
     test_mode = True
     if test_mode:
         parsed_args_main = argparser.parse_args("-ps testparant".split())
+        parsed_args_main = argparser.parse_args("--cc_report".split())
         parsed_args_subparser = argparser.parse_args("npp -f xyz".split())
         loglevel = C.LOGLEVEL[parsed_args_main.get("loglevel","DEBUG").upper()].value
-        parsed_args = parsed_args_subparser
+        parsed_args = parsed_args_main
         # parsed_args = parsed_args_main
     else:
         parsed_args = argparser.parse_args()
@@ -126,13 +135,7 @@ if __name__ == "__main__":
         logger.info(f"\nConfig:\n {json.dumps(parsed_args, indent=4)}")
 
     if True:
-        report = runner.config.report()
-        f_report = REPORT
-        ph = PersistenceHelper()
-        ph.save_txt_file(f_report,"\n".join(report))
-
-    if False:
-        cmd = runner.get_cmd(parsed_args)
+        cmd = runner.run_cmd(parsed_args)
         logger.info(f"COMMAND: {cmd}")
         # run the command
         CmdRunner().run_cmd(cmd)

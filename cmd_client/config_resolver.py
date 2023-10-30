@@ -95,12 +95,15 @@ class ConfigResolver():
         return config_value
 
     def _get_config_item(self,config:Enum,
-                            name:str,attribute:str):
+                            name:str=None,attribute:str=None):
         """ tries to retrieve a configuration value
             from config dict returns config category and name"""
+        if not config:
+            logger.warning("No Enum was passed")
+            return
 
-        # check config types
         config_name = config.name
+        # check config types
         if not config in self._config_types:
             logger.info(f"CONFIGURATION: No Configuration for {config_name}")
             return (None,None)
@@ -124,20 +127,31 @@ class ConfigResolver():
 
     def _validated_path(self,path:str)->str:
         """ resolves path information and returns absolute path None if invalid"""
-        if path and os.path.isdir(path):
-            return os.path.abspath(path)
+        if path:
+            if os.path.isdir(path):
+                return os.path.abspath(path)
+            # now resolve the path variable if given
+            resolved_path = self.get_config_element(C.PATH_KEY,path,C.RESOLVED_PATH)
+            return resolved_path
         else:
             return
 
     def _validated_file(self,file:str,path:str)->str:
         """ resolves file information and returns absolute path None if invalid"""
         out_file = None
+        # file path is already resolved
         if file and os.path.isfile(file):
             out_file = os.path.abspath(file)
+        # path is given
         elif path is not None and file is not None and os.path.isdir(path):
             file_abs = os.path.join(path,file)
-            if os.path.isfile(file_abs):
-                out_file = os.path.abspath(file_abs)
+            out_file = os.path.abspath(file_abs)
+            if not os.path.isfile(file_abs):
+                logger.warning(f"Validated File {out_file} does not exist")
+        # no path is given, try to get from dereferencing file
+        elif file is not None and path is None:
+            out_file = self.get_config_element(C.FILE_KEY,file,C.RESOLVED_FILE)
+
         return out_file
 
     def _resolve_config(self,config_category_enum:Enum)->None:
@@ -167,14 +181,13 @@ class ConfigResolver():
     def _resolve_references(self):
         """ resolves references in the config and amends config """
         # list of enums to be ignored
-        ignore_config = [C.CONFIG.PATTERN,
-                         C.CONFIG.SHORTCUT,
-                         C.CONFIG.FILE,
-                         C.CONFIG.PATH,
-                         C.CONFIG.EXECUTABLE,
-                         C.CONFIG.CMD_PARAM,
+        ignore_config = [C.CONFIG.CMD_PARAM,
                          C.CONFIG.CMD_SUBPARSER,
-                         C.CONFIG.CMD_MAP]
+                         C.CONFIG.CMD_MAP,
+                         C.CONFIG.PATH,
+                         C.CONFIG.FILE,
+                         C.CONFIG.EXECUTABLE,
+                         ]
         # start with path, file, executable
         self._resolve_config(C.CONFIG.PATH)
         self._resolve_config(C.CONFIG.FILE)
@@ -314,10 +327,56 @@ class ConfigResolver():
 
         return out_dict
 
+    def _action_report(self,action_info:dict):
+        """ creates the configuration report """
+        file_ref = action_info.get(C.RESOLVED_FILE)
+        if not file_ref:
+            logger.warn("There is no resolved file path for Action report, check config")
+        return {C.RESOLVED_FILE:file_ref}
+
+    def _resolve_action(self,action,action_info:dict):
+        """ resolve specific actions """
+        match action:
+            case C.ACTION_CREATE_REPORT:
+                return {action:self._action_report(action_info)}
+            case _:
+                logger.info(f"{action} is no valid action")
+
+    def _resolve_actions(self,param_type:str,param_info_dict:dict)->dict:
+        """ try to perform actions from configuration mapping """
+        # get known actions
+        actions = EnumHelper.keys(C.ACTION,lower=True)
+        actions_dict = {}
+        logger.info(f"Resolving actions for {param_type}")
+        map_dict = param_info_dict.get(C.VALUE,{}).get(C.MAP,{}).get(C.MAP)
+        param_info_dict = param_info_dict.get(C.VALUE,{})
+        for p_name,p_info in param_info_dict.items():
+            action_map = map_dict.get(p_name)
+            if not action_map:
+                continue
+            config_type = action_map.get(C.TYPE)
+            config_key = action_map.get(C.KEY)
+            config_dict = self.get_config_element(config_type,config_key)
+            action = config_dict.get(C.ACTION_KEY)
+            if not p_info: # option was not chosen, skip
+                continue
+            logger.debug(f"Resolve Action {action} from {config_type}>{config_key}")
+            if not action:
+                logger.warning(f"There is no action in Configuration {config_type}>{config_key}")
+                continue
+            if not action in actions:
+                logger.warning(f"Action {action} is not defined in ACTION Enum, check")
+                continue
+            action_dict = self._resolve_action(action,config_dict)
+            actions_dict.update(action_dict)
+
+        return actions_dict
 
     def _map_params2config(self,param_maps:dict)->dict:
         """ map resolved params from input / parseargs to configuration """
         out = {}
+        out_pattern = {}
+        out_action = {}
         for param_type,param_info in param_maps.items():
             cmd = None
             map_key = param_info.get(C.KEY)
@@ -342,10 +401,14 @@ class ConfigResolver():
                         logger.warning("Map {map_key} (used for {param_type}), has no pattern defined")
                     pattern = self.get_pattern(pattern_key,**params_dict)
                     if pattern:
-                        out[param_type]=pattern
+                        out_pattern[param_type]=pattern
+                case C.ACTION_KEY: # generic mapping of input params to configuration
+                    resolved_actions = self._resolve_actions(param_type,param_info)
+                    if resolved_actions:
+                        out_action.update(resolved_actions)
                 case _:
                     logger.warning(f"Map {map_key} (used for {param_type}), Map Type {map_type} is not supported ")
-        return out
+        return {C.PATTERN_KEY:out_pattern,C.ACTION_KEY:out_action}
 
     def get_cmd_dict(self,cmd_params_key:str,parsed_args:dict,
                           subparser_template:str=None,
@@ -356,7 +419,6 @@ class ConfigResolver():
                            subparser_template,cmd_params_default)
         cmd_out = self._map_params2config(param_maps)
         return cmd_out
-
 
     def _resolve_argparser(self,cmd_params_key:str,parsed_args:dict,
                           subparser_template:str=None,
@@ -509,17 +571,6 @@ class ConfigResolver():
             out_echo.append(out_echo_line)
         out.extend(out_echo)
         return out
-
-    # def export(self,export_type,**kwargs):
-    #     """ exports different types of configuration in different formats """
-    #     export_enum = EnumHelper.enum(C.EXPORT_OPTION,export_type)
-    #     if not export_enum:
-    #         logger.info(f"Couldn't find an export option {export_type}, check settings")
-    #         return
-    #     match export_enum:
-    #         case C.EXPORT_OPTION.ENV_WIN:
-    #             return self._export_env_cmd()
-    #     return [None]
 
 class CmdMap():
     """ Maps Input Parameters to Configuration Items """

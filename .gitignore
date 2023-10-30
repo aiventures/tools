@@ -46,3 +46,4 @@ v.bat
 param_config.yaml
 code_snippets/template_config/test_subparser_local,py
 cmd_client/param_config copy.yaml
+cc_report.md

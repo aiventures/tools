@@ -41,13 +41,14 @@ class Config():
     def get_cmd(self,parsed_args:dict)->str:
         """ receives the cmd commands as dict
             and attempts to construct
-            an output command
+            an output command / resolving an action
         """
         cmd_params_key = self._argparser.params_template
         subparser_template = self._argparser.subparser_template
         # now get resolved values for the various configurations
         cmd_conmands = self._config_resolver.get_cmd_dict(cmd_params_key,parsed_args,
                                                         subparser_template)
+
         return cmd_conmands
 
     @property
@@ -75,6 +76,27 @@ class Config():
                         C.CMD_MAP_KEY
                         ]
         return param_types
+
+
+    def _action_create_report(self,action_info,**parsed_args):
+        """ creates a report using resolved file path"""
+        f_report = action_info.get(C.RESOLVED_FILE)
+        if not f_report:
+            logger.warning(f"Couldn't find resolved report path, check settings")
+            return
+        ph = PersistenceHelper()
+        report = self.report()
+        ph.save_txt_file(f_report,"\n".join(report))
+        logger.info(f"Saved config report: {f_report}")
+
+    def run_actions(self,actions_dict,**parsed_args):
+        """ run specific actions """
+        for action,action_info in actions_dict.items():
+            match action:
+                case C.ACTION_CREATE_REPORT:
+                    self._action_create_report(action_info)
+                case _:
+                    pass
 
     def _report_cmd_param(self,param_dict):
         out = []
@@ -104,22 +126,63 @@ class Config():
             out.append(out_s)
         return out
 
+    def _report_cmd_action_map(self,param_info:dict):
+        """ get the input values from an action map """
+        out = []
+        for key,info in param_info.items():
+            if not isinstance(info,dict):
+                continue
+            config_type = info.get(C.TYPE)
+            config_key = info.get(C.KEY)
+            config_link = f"[`{config_type}-{key}`](#{config_type.lower()}-{key.lower()})"
+            k = f"* **OPTION** `{config_key}` (config type: {config_link})  "
+            # try to get the configuration values
+            config_element = self._config_resolver.get_config_element(config_type,config_key,{})
+            help_info = config_element.get(C.HELP)
+            h = f"{help_info}"  if help_info is not None else None
+            config_file = config_element.get(C.FILE_KEY)
+            config_action = config_element.get(C.ACTION_KEY)
+            config_path = config_element.get(C.PATH_KEY)
+            resolved_path = config_element.get(C.RESOLVED_PATH)
+            resolved_file = config_element.get(C.RESOLVED_FILE)
+            a = f"  * `action`: ```{config_action}```"  if config_action is not None else None
+            f = f"  * `file`: ```{config_file}```"  if config_file is not None else None
+            p = f"  * `path`: ```{config_path}```"  if config_path is not None else None
+            resolved = "[NO_RESOLVED_REF]"
+            if resolved_path:
+                resolved = resolved_path
+            if resolved_file:
+                resolved = resolved_file
+            r = f"  * `resolved`: ```{resolved}```"
+            params = [k,h,a,f,p,r]
+            params = [p for p in params if p is not None]
+            out.extend(params)
+        return out
+
     def _report_cmd_map(self,param_dict):
         out = []
         for param,param_info in param_dict.items():
             if param == "map":
             # out_s = f"1. **`subparser`**: [{param_info}](#cmd_param-{param_info.lower()})"
                 map_type = param_info.get(C.TYPE)
-                t = f"  * **MAPPING TYPE**: `{map_type}`" if map_type is not None else ""
-                cmd_param = param_info.get(C.CMD_PARAM)
-                c =f"[`{cmd_param}`](#cmd_param-{cmd_param.lower()})"
-                pattern = param_info.get(C.PATTERN_KEY)
-                p =f"[`{pattern}`](#pattern-{pattern.lower()})"
-                cp = f"  * **COMMAND LINE PROFILE** {c}" if cmd_param is not None else None
-                pp = f"  * **PATTERN**: {p}" if pattern is not None else None
-        params = [t,cp,pp]
-        params = [p for p in params if p is not None]
-        out.extend(params)
+                match map_type:
+                    case C.PATTERN_KEY:
+                        t = f"  * **MAPPING TYPE**: `{map_type}`" if map_type is not None else ""
+                        cmd_param = param_info.get(C.CMD_PARAM)
+                        if isinstance(cmd_param,str):
+                            c =f"[`{cmd_param}`](#cmd_param-{cmd_param.lower()})"
+                        pattern = param_info.get(C.PATTERN_KEY)
+                        if isinstance(pattern,str):
+                            p =f"[`{pattern}`](#pattern-{pattern.lower()})"
+                        cp = f"  * **COMMAND LINE PROFILE** {c}" if cmd_param is not None else None
+                        pp = f"  * **PATTERN**: {p}" if pattern is not None else None
+                        params = [t,cp,pp]
+                        params = [p for p in params if p is not None]
+                        out.extend(params)
+                    case C.ACTION_KEY:
+                        params = self._report_cmd_action_map(param_info)
+                        out.extend(params)
+
         return out
 
     def _report_param(self,param_name,param_dict,config_type:str=None):
@@ -154,11 +217,22 @@ class Config():
         resolved_file = param_dict.get(C.RESOLVED_FILE)
         resolved  = "[NO_RESOLVED_REF]"
         if resolved_path:
-            resolved  = f"`{resolved_path}`"
+            resolved  = f"{resolved_path}"
         if resolved_file:
-            resolved  = f"`{resolved_file}`"
-        rp = f"  * `resolved`: `{resolved}`" if value else None
-        export = param_dict.get(C.RESOLVED_PATH)
+            resolved  = f"{resolved_file}"
+        rp = f"  * `resolved`:``` {resolved}```"
+        # get export value if specified
+        export_type = param_dict.get(C.EXPORT)
+        export = None
+        if export_type:
+            # return the resolved path
+            match export_type:
+                case C.PATH_KEY:
+                    export = resolved_path
+                case C.FILE_KEY:
+                    export = resolved_file
+                case C.VALUE:
+                    export = value
         ex = f"  * `export to env: {export}`" if export is not None else None
         add_lines=[f,p,v,rp,ex]
         add_lines=[l for l in add_lines if l is not None]

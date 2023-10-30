@@ -32,6 +32,7 @@ class CONFIG_ATTRIBUTE(Enum):
     PATTERN = "String Pattern to Be Evaluated"
     TYPE = "Parameter Type"
     PARAM = "Parameter"
+    ACTION = "Perform Actions"
     KEY = "Key attribute"
     VALUE = "Value attrubute (for example for Env Variables)"
     DEFAULT = "Default Value"
@@ -46,9 +47,14 @@ class CONFIG_ATTRIBUTE(Enum):
     COMMAND = "Subparser Shortcut (from Command line, empty if main parser is used)"
     CMDPARAM_DEFAULT = "Default CMD Params"
 
+class ACTION(Enum)    :
+    """ Predefined Actions to be performed, can be added to configuration """
+    CREATE_REPORT = "Create a Configuration Report"
 class CMD_MAP(Enum):
     """ Mapping rules Command Line Client to Configurations """
     PATTERN = "Map Params to Pattern"
+    SHORTCUT = "Map Params to Shortcuts"
+    ACTION = "Map Params to Actions"
 
 class LOGLEVEL(Enum):
     """ loglevel handling """
@@ -114,3 +120,5 @@ SHORTCUT = key(CONFIG.SHORTCUT)
 CMD_PARAM = key(CONFIG.CMD_PARAM)
 CMD_SUBPARSER = key(CONFIG.CMD_SUBPARSER)
 CMD_MAP_KEY = key(CONFIG.CMD_MAP)
+ACTION_KEY = "action"
+ACTION_CREATE_REPORT = key(ACTION.CREATE_REPORT)
