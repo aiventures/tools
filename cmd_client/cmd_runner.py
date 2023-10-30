@@ -21,8 +21,11 @@ class CmdRunner():
         self._cwd = os.path.abspath(cwd)
 
     def run_cmd(self,os_cmd:str):
-        """ runs command line command """
+        """ runs command line command """        
         logger.info(f"run command [{os_cmd}]")
+        if not os_cmd:
+            logger.warning("No command submitted, return")
+            return
         oscmd_shlex=shlex.split(os_cmd)
         # special case: output contains keywords (in this case its displaying a logfile)
         self._output=[]

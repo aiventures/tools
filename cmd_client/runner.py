@@ -2,8 +2,13 @@
 import sys
 import os
 import logging
+import json
 from pathlib import Path
 from tools.cmd_client.config import Config
+from tools.cmd_client.configpath import CONFIG_PATH, REPORT
+import tools.cmd_client.constants as C
+from tools.cmd_client.cmd_runner import CmdRunner
+from tools.cmd_client.persistence_helper import PersistenceHelper
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +57,84 @@ class Runner():
 
     @property
     def config(self):
-        """ cofnig getter method """
+        """ config getter method """
         return self._config
 
+    @staticmethod
+    def get_cmd_client():
+        """ creates cmd client """
+        # location of config file
+        # copy the configpath_template, supply path and
+        # set the path pointing to the param_config.yaml file
+        f_config = CONFIG_PATH
+        # get the argparseconfig from the yaml template file
+        # main parser (as in yaml)
+        main_config = "cmd_client_main"
+        # sub parser configuration (as in yaml)
+        subparser_config = "subparser_cmd_client"
+        # add default parameters to parser configuration
+        default_params = [ # C.DEFAULT_PARSER_ATTRIBUTES.ADD_TIMESTAMP,
+                        C.DEFAULT_PARSER_ATTRIBUTES.LOGLEVEL]
+        # additional main attributes for the arg parser
+        kwargs = { C.PARSER_ATTRIBUTE.DESCRIPTION.value: "Command Line Client",
+                C.PARSER_ATTRIBUTE.PROG.value: "COMMAND LINE CLI",
+                C.PARSER_ATTRIBUTE.EPILOG.value: "ONE CLI to bond them all ..."
+                }
+        runner = Runner(f_config,main_config, subparser_config,
+                        default_params,**kwargs)
+        return runner
+
+    def get_cmd(self,parsed_args)->str:
+        """ returns the os command """
+        cmd_dict = self._config.get_cmd(parsed_args)
+
+        if cmd_dict:
+            num_cmds = len(cmd_dict)
+            cmds = list(cmd_dict.values())
+            logger.info(f"Retrieved ({num_cmds}) Commands {list(cmd_dict.keys())}")
+        else:
+            logger.warning("No commands found")
+            return None
+
+        if isinstance(cmds,list):
+            if len(cmds)>1:
+                logger.warning("There's more than one command, check the settings")
+            return cmds[0]
 
 if __name__ == "__main__":
-    loglevel = logging.DEBUG
+    runner = Runner.get_cmd_client()
+    # sample test all configurations
+    argparser = runner.config.argparser
+    test_mode = True
+    if test_mode:
+        parsed_args_main = argparser.parse_args("-ps testparant".split())
+        parsed_args_subparser = argparser.parse_args("npp -f xyz".split())
+        loglevel = C.LOGLEVEL[parsed_args_main.get("loglevel","DEBUG").upper()].value
+        parsed_args = parsed_args_subparser
+        # parsed_args = parsed_args_main
+    else:
+        parsed_args = argparser.parse_args()
+        loglevel = C.LOGLEVEL[parsed_args.get("loglevel","DEBUG").upper()].value
+
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
                         level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
+    # show config in log
+    if test_mode:
+        logger.info(f"\nConfig (MAIN):\n {json.dumps(parsed_args_main, indent=4)}")
+        logger.info(f"\nConfig (SUBCONFIG):\n {json.dumps(parsed_args_subparser, indent=4)}")
+    else:
+        logger.info(f"\nConfig:\n {json.dumps(parsed_args, indent=4)}")
+
+    if True:
+        report = runner.config.report()
+        f_report = REPORT
+        ph = PersistenceHelper()
+        ph.save_txt_file(f_report,"\n".join(report))
+
+    if False:
+        cmd = runner.get_cmd(parsed_args)
+        logger.info(f"COMMAND: {cmd}")
+        # run the command
+        CmdRunner().run_cmd(cmd)
+
+    pass

@@ -56,14 +56,54 @@ class PersistenceHelper():
             return None
 
     @staticmethod
-    def replace_file_suffix(f_name:str,new_suffix:str):
+    def replace_file_suffix(f_name:str,new_suffix:str)->str:
         """ Replaces file suffix """
         p_file = Path(f_name)
-        suffix = p_file.suffix
-        if suffix:
-            return f_name.replace(suffix,"."+new_suffix)
+        return str(p_file.with_suffix(new_suffix))
+
+    @staticmethod
+    def called_from_bash()->bool:
+        """ returns whether script run from bash """
+        return True if os.environ.get("TERM") else False
+
+    @staticmethod
+    def posix2winpath(f:str)->str:
+        """ try to get winpath from (absolute) posix string """
+        p_parts = f.split("/")
+        p_parts = [p for p in p_parts if p]
+        drive = p_parts[0]+":\\"
+        p_parts = p_parts[1:]
+        if not os.path.isdir(drive):
+            logger(f"Could not find drive {drive} from Path {f}")
+            return None
+        p = os.path.join(drive,*p_parts)
+        return p
+
+    @staticmethod
+    def absolute_winpath(f:str,posix:bool=False,uri:bool=False,as_path:bool=False)->bool:
+        """ gets absolute path in a given representation also does an existence check """
+        p = Path(f)
+        p_valid = any([p.is_dir(),p.is_file()])
+        if not p_valid:
+            # try to interpret string as posix path
+            p = Path(PersistenceHelper.posix2winpath(f))
+            p_valid = any([p.is_dir(),p.is_file()])
+            if not p_valid:
+                logger.warning(f"{f} is not a valid file or path (path)")
+                return
+        p = p.absolute()
+        if posix: # return as posix string (however it is not a valid path)
+            p_parts=p.parts
+            p_root="/"+p_parts[0][0]
+            p_posix="/".join([p_root,*p_parts[1:]])
+            return p_posix
+        elif uri:
+            return p.as_uri()
         else:
-            return f_name+"."+new_suffix
+            if as_path:
+                return p
+            else:
+                return str(p)
 
     @staticmethod
     def dict_stringify(d:dict)->dict:

@@ -2,8 +2,9 @@
 import sys
 import logging
 import argparse
+# from tools.cmd_client.config import Config
+# you need to adjust configpath_template.py
 import tools.cmd_client.constants as C
-from tools.cmd_client.config import Config
 logger = logging.getLogger(__name__)
 
 class ParseHelper():
@@ -13,7 +14,7 @@ class ParseHelper():
     KWARGS = "kwargs"
     CMDPARAM_DEFAULT = "cmdparam_default"
 
-    def __init__(self,config:Config,
+    def __init__(self,config,
                  params_template:str=None,
                  subparser_template:str=None,
                  params_default:list=None,
@@ -50,6 +51,16 @@ class ParseHelper():
         else:
             logger.error("no parser or subparser was submitted, check settings")
             return
+
+    @property
+    def params_template(self):
+        """ return the params template """
+        return self._params_template
+
+    @property
+    def subparser_template(self):
+        """ return the subparams template """
+        return self._subparser_template
 
     def _add_template(self):
         """ adding a single template to parser """
@@ -149,6 +160,7 @@ class ParseHelper():
         return args_dict
 
 if __name__ == "__main__":
-    loglevel = logging.DEBUG
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
-                        level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
+                    level=logging.debug, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
+    # example is given in Runner class
+    pass
