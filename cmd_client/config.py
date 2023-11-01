@@ -74,7 +74,8 @@ class Config():
                         C.CMD_PARAM,
                         C.CMD_SUBPARSER,
                         C.CMD_MAP_KEY,
-                        C.CMD_INPUT_MAP
+                        C.CMD_INPUT_MAP,
+                        C.CMD_INPUT_MAP_PATTERN
                         ]
         return param_types
 
@@ -190,6 +191,7 @@ class Config():
         return out
 
     def _report_cmd_input_map(self,param_dict):
+        """ maps the input pattern """
         if not isinstance(param_dict,dict):
             return []
         out = []
@@ -225,7 +227,45 @@ class Config():
 
         return out
 
+    def _report_cmd_input_map_pattern(self,param_dict):
+        # TODO ADD REPORT SECTION
+        if not isinstance(param_dict,dict):
+            return []
+        out = []
+        # cmd_input_iter = iter(param_dict)
+        # try:
+        #     while ( key := next(cmd_input_iter) ) is not None:
+        #         info = param_dict[key]
+        #         if not isinstance(info,dict):
+        #             continue
+        #         help_s = info.get(C.HELP,"")
+        #         if help_s:
+        #             help_s = f"({help_s})"
+        #         out.append(f"* **CMD INPUT MAP** `{key}` {help_s}")
+        #         mappings = info.get(C.MAP,{})
+        #         for mapping in mappings:
+        #             source_info = mapping.get(C.SOURCE,{})
+        #             params = [C.TYPE,C.PARAM_KEY,C.KEY]
+        #             values = [source_info.get(p,f"[No PARAM {p}]") for p in params]
+        #             param = mapping.get(C.PARAM_KEY,"[NO_MAPPING_TO_PARAM]")
+        #             # generate link
+        #             config_path = "Config Path (not resolved)"
+        #             if values[0] and values[1]:
+        #                 text = "Config Path "
+        #                 if values[2]:
+        #                     text += " (resolved)"
+        #                 else:
+        #                     text += " (not resolved)"
+        #                 config_path = f"[{text}](#{values[0]}-{values[1]})"
+        #             s= f'  * {config_path} ```[{">".join(params)}]: [{">".join(values)}] => {param}``` (parser value)'
+        #             out.append(s)
+        # except StopIteration:
+        #     pass
+
+        return out
+
     def _report_param(self,param_name,param_dict,config_type:str=None):
+        # TODO REFACTOR METHOD
         out=[]
 
         match config_type:
@@ -241,6 +281,11 @@ class Config():
             case C.CMD_INPUT_MAP:
                 out = self._report_cmd_input_map(param_dict)
                 return out
+            case C.CMD_INPUT_MAP_PATTERN:
+                # TODO Add report
+                pass
+                # out = self._report_cmd_input_map_pattern(param_dict)
+                # return out
 
         param_type = param_dict.get(C.TYPE)
         pt = " [`"+param_type+"`]" if param_type else ""

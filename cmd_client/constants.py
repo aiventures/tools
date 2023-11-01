@@ -18,6 +18,7 @@ class CONFIG(Enum):
     CMD_SUBPARSER = "Definition of Subparser Configuration"
     CMD_MAP = "Mapping Rules for assigning CLI command to Command"
     CMD_INPUT_MAP = "Mapping Input Parameters to Config Values (can be used for shortcuts)"
+    CMD_INPUT_MAP_PATTERN = "Mapping Input Parameters to Patterns (can be used for shortcuts)"
 
 class EXPORT_OPTION(Enum):
     """ Exporting Options """
@@ -128,6 +129,7 @@ TARGET = key(CONFIG_ATTRIBUTE.TARGET)
 COMMAND = key(CONFIG_ATTRIBUTE.COMMAND)
 SCRIPT = key(CONFIG.SCRIPT)
 CMD_INPUT_MAP = key(CONFIG.CMD_INPUT_MAP)
+CMD_INPUT_MAP_PATTERN  = key(CONFIG.CMD_INPUT_MAP_PATTERN)
 SCRIPT_BASH = key(CONFIG.SCRIPT_BASH)
 ENVIRONMENT_WIN = key(CONFIG.ENVIRONMENT_WIN)
 ENVIRONMENT_BASH = key(CONFIG.ENVIRONMENT_BASH)

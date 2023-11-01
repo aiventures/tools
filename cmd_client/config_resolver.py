@@ -411,7 +411,7 @@ class ConfigResolver():
         return {C.PATTERN_KEY:out_pattern,C.ACTION_KEY:out_action}
 
     def _resolve_cmd_param_map(self,params_template:str,param_map:dict,parsed_args:dict)->None:
-        """ resolvve a single param map """
+        """ resolve a single param map """
 
         for map_param,map_param_info in param_map.items():
             if not map_param_info:
@@ -445,6 +445,44 @@ class ConfigResolver():
                     if param not in cmd_params:
                         logger.warning(f"Map Input Param: No Config: {config_type}>{config_param}>{key} has no param [{param}]")
 
+    def _resolve_cmd_param_map_pattern(self,params_template:str,param_map:dict,parsed_args:dict)->None:
+        """ resolvve a single param map pattern"""
+
+        for map_param,map_param_info in param_map.items():
+            if not isinstance(map_param_info,dict):
+                continue
+            # try to find a mapping if parameter is supplied
+            if not parsed_args.get(map_param):
+                continue
+            logger.info(f"Mapping Params [{params_template}]>[{map_param}]")
+            mapping_list = map_param_info.get(C.MAP)
+            pattern = map_param_info.get(C.PATTERN_KEY)
+            if not pattern:
+                logger.warning(f"Couldn't find pattern value in {C.CMD_INPUT_MAP_PATTERN}>{map_param}")
+                continue
+            pattern_info = self.get_config_element(C.PATTERN_KEY,pattern)
+            if not pattern_info:
+                logger.warning(f"Couldn't find pattern configuration for {pattern}, check pattern section")
+                continue
+            for param_mapping in mapping_list:
+                if not isinstance(param_mapping,dict):
+                    logger.warning(f"Param Mapping {map_param}, map is not correct, expected dict")
+                    continue
+                param = list(param_mapping.keys())[0]
+                # check if param exists in template                
+                pattern_param = pattern_info.get(C.PARAM_KEY,{}).get(param)
+                if not pattern_param:
+                    logger.warning(f"Parse param [{map_param}]: Param [{param}] not found in Pattern Template {params_template}")
+                    continue
+                src_keys = param_mapping.get(param,{})
+                kwargs = {"config":src_keys.get(C.TYPE),
+                          "config_name":src_keys.get(C.PARAM_KEY),
+                          "config_attribute":src_keys.get(C.KEY),
+                          "resolve":True   }
+                value = self.get_config_element(**kwargs)
+                if value:
+                    parsed_args[param]=value
+
     def _resolve_cmd_param_maps(self,cmd_params_key:str,parsed_args:dict,
                           subparser_template:str=None,
                           cmd_params_default:str="cmdparam_default")->None:
@@ -468,6 +506,31 @@ class ConfigResolver():
             cmd_map = cmd_input_map.get(input_map,{})
             self._resolve_cmd_param_map(map_key,cmd_map,parsed_args)
 
+    def _resolve_cmd_param_pattern_maps(self,cmd_params_key:str,parsed_args:dict,
+                          subparser_template:str=None,
+                          cmd_params_default:str="cmdparam_default")->None:
+        """ resolves input mapping  """
+        # TODO Implement
+        pass
+        cmd_input_map_pattern = self.get_config_element(C.CMD_INPUT_MAP_PATTERN,{})
+
+        subparser_cmd = parsed_args.get(C.COMMAND)
+        subparser_map = {}
+        # get the cmd cofig template for the subcommand
+        cmd_params_subcommand = None
+        if subparser_cmd:
+            cmd_params_subcommand = self.get_config_element(C.CMD_SUBPARSER,
+                                                            subparser_template,
+                                                            subparser_cmd)
+        input_maps = {C.DEFAULT:cmd_params_default,
+                      C.MAIN:cmd_params_key,
+                      subparser_cmd:cmd_params_subcommand}
+        for input_map,map_key in input_maps.items():
+            if not map_key:
+                continue
+            cmd_map = cmd_input_map_pattern.get(input_map,{})
+            self._resolve_cmd_param_map_pattern(map_key,cmd_map,parsed_args)
+
     def get_cmd_dict(self,cmd_params_key:str,parsed_args:dict,
                           subparser_template:str=None,
                           cmd_params_default:str="cmdparam_default")->dict:
@@ -475,6 +538,9 @@ class ConfigResolver():
         cmd_out = []
         # MAP SHORTCUTS
         self._resolve_cmd_param_maps(cmd_params_key,parsed_args,
+                           subparser_template,cmd_params_default)
+        # MAP SHORTCUTS TO PATTERNS
+        self._resolve_cmd_param_pattern_maps(cmd_params_key,parsed_args,
                            subparser_template,cmd_params_default)
 
         param_maps = self._resolve_argparser(cmd_params_key,parsed_args,
@@ -526,7 +592,7 @@ class ConfigResolver():
         """ returns a config element down the hierarchy according to hierarchy
             CONFIG > CONFIG_NAME (TEMPLATE SPECIFIC) > CONFIG_ATTRIBUTE
             If none is used the complete config substructure is used
-            if resolve is then resolved attribute values are returned 
+            if resolve is then resolved attribute values are returned
         """
         if not config:
             return
@@ -538,8 +604,8 @@ class ConfigResolver():
         if not config_attribute:
             logger.debug(f"Returning Config {config} > {config_name}")
             return config_dict
-        config_attribute = config_dict.get(config_attribute,None)
-        logger.debug(f"Returning Config {config} > {config_name} > {config_attribute}")
+        value = config_dict.get(config_attribute,None)
+        logger.debug(f"Returning Config {config} > {config_name} > {config_attribute} > {value}")
         # now try to resolve attributes
         resolved = None
         match config_attribute:
@@ -553,8 +619,8 @@ class ConfigResolver():
                     logger.warning(f"Couldn't find export field in configuration {config}>{config_name}")
                 resolved = config_dict.get(export_field)
         if resolve and resolved:
-            config_attribute = resolved
-        return config_attribute
+            value = resolved
+        return value
 
     def get_pattern(self,name:str,**kwargs):
         """ fille a given pattern with predefined / submitted params """

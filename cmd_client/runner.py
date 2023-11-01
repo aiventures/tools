@@ -12,12 +12,6 @@ from tools.cmd_client.persistence_helper import PersistenceHelper
 
 logger = logging.getLogger(__name__)
 
-# here's a list of collected commamnds for test driving 
-# aleays use option -h / --help to display commands
-CMD_NPP = "npp -f xyz --line 10" # open notepadplusplus with a file defined in file>xyz
-CMD_VSCODE = "vs -f xyz -l 10" # open vs code with the same file at line 10
-CMD_REPORT = "--cc_report" # create a configuration report
-
 class Runner():
     """ bundling of File Transformer Properties for parsing """
     DEFAULT_CONFIG = "config.json"
@@ -121,8 +115,14 @@ if __name__ == "__main__":
     runner = Runner.get_cmd_client()
     # sample test all configurations
     argparser = runner.config.argparser
+    # here's a list of collected commamnds for test driving 
+    # aleays use option -h / --help to display commands
+    CMD_NPP = "npp -f xyz --line 10" # open notepadplusplus with a file defined in file>xyz
+    CMD_VSCODE = "vs -f xyz -l 10" # open vs code with the same file at line 10
+    CMD_REPORT = "--cc_report" # create a configuration report    
+    CMD_NPP_TODO = "npp --todo -l 5" # open notepadplusplus with a fixed file defined in shortcut file
     # use one of the sample configs above
-    test_cmd = CMD_REPORT
+    test_cmd = CMD_NPP_TODO
     if test_cmd:
         parsed_args = argparser.parse_args(test_cmd.split())
     else:
