@@ -227,6 +227,12 @@ cmd_param:
       dest: todo
       action: "store_true"
       help: "Opens todo.txt file"
+    todo2:
+      param_short: ot2
+      param: todo2
+      dest: todo2
+      action: "store_true"
+      help: "Opens todo2.txt file"         
 
   cmdparam_vscode:
     help: "VSCODE Command Line Input"
@@ -403,3 +409,14 @@ cmd_input_map:
             key: path
           param: path
       help: "Testing the map"
+# maps shortcuts to patterns with predefined values, for example 
+# use all vscode pattern, but only change file to a fixed file 
+# (for frequently used files you can use a fixed alias)
+cmd_input_map_pattern:
+  npp: # subparser alias as defined in cmd_subparser
+    help: "Maps fixed pattern to Notepad++ subparser (`cmdparam_notepadpp`)"
+    todo2:   # example open a fixed todo.txt using vs code. Key needs to correspond with cmd_input
+      pattern: notepadpp     # use the notepadpp pattern to get all values
+      map:  # get file attribute from config: file > todo_file > file key (resolved)
+        - file:  {type: file, param: todo_file, key: file} 
+      help: "Map Todo.TXT to be opened with Notepadpp using pattern"
