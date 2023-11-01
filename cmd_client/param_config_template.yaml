@@ -20,19 +20,24 @@ pattern:
         help: "File to be opened at line number"
       extra:
         type: param
-        help: "Additional params (in quotes) to be appended to command"        
+        help: "Additional params (in quotes) to be appended to command"
     help: "Opens Notepad++: [notepadpp] -n[line] [extra]"
-
   vscode:
-    pattern: "{[vscode]} {[file]}"
+    pattern: '{[vscode]} --goto "{[file]}{:[line]}" {[extra]}'
     param:
       vscode:
         type: executable # use to check
-        help: "Executable Path"
+        help: "Path to code.exe"
       file:
         type: file
         help: "File to be opened"
-    help: "Opens VSCODE: [vscode] [file]"
+      line:
+        type: param
+        help: "File to be opened at line number"
+      extra:
+        type: param
+        help: "Additional params (in quotes) to be appended to command"
+    help: "Opens VSCODE: [vscode] [file] at [line] with [extra]"
   vscode_diff:
     pattern: "{[vscode]} --diff {[oldfile]} {[newfile]}"
     param:
@@ -62,11 +67,11 @@ pattern:
 executable:
   notepadpp:
     file: "notepad++.exe"
-    path: "C:/#REPLACE#/Notepad++"
-    help: "Path to Notepad++"  
+    path: "C:/10_Tools/Notepad++"
+    help: "Path to Notepad++"
   vscode:
     file: "Code.exe"
-    path: "C:/#REPLACE#/VSCode"
+    path: "C:/<PATH_TO>VSCode"
     help: "Path to VS Code"
   cygwin:
     file: "xyz"
@@ -74,6 +79,12 @@ executable:
 # sample block for folder paths (reusable)
 path:
   # example for reference to be looked in environment_win section
+  cwd:
+    path: "."
+    help: "Current Working Directory"
+  cc_home:
+    path: "C:/<PATH_TO>W<PATH_TO>"
+    help: "Command Center HOME Directory"
   folder_in_environment:
     path: environment_win # this points to environment_win
     reference: howto      # this points to howto config
@@ -82,18 +93,30 @@ path:
     path: "path>work_folder"
     help: "xdrf"
   favorites_folder:
-    path: "C:/#REPLACE#"
+    path: "C:/05_TRANSIENT"
     help: "xdrf"
   wrong_folder:
     help: "xdrf"
 # sample block for document paths
 file:
+  todo_file:
+    file: "todo.txt"
+    path: "C:/<PATH_TO>/todo_txt"
+    help: "TODO.TXT File"
+  cc_config_file:
+    file: "param_config.yaml"
+    path: cc_home
+    help: "CONFIG File for the Command Center"
+  cc_report_file:
+    file: "cc_report.md"
+    path: cwd
+    help: "File to be created for the Command Center"
   absolute_file_path:
-    file: "C:/#REPLACE#/testfile.txt"
+    file: "C:/<PATH_TO>PlantUML/test.png"
     help: "sample for an absolute file"
   file_name_and_path:
-    file: "testfile.txt"
-    path: "C:/#REPLACE#"
+    file: "test.png"
+    path: "C:/<PATH_TO>PlantUML"
     help: "sample for an absolute fiöe"
   file_name_and_ext_path:
     file: "test.png"
@@ -106,8 +129,8 @@ file:
     reference: valid_file
     help: "sample for an absolute fiöe"
   xyz: # testing resolve_params
-    file: "C:/#REPLACE#/param_config.yaml"
-    help: "sample for a referenced file"    
+    file: "C:/<PATH_TO>W<PATH_TO>/param_config.yaml"
+    help: "sample for a referenced file"
 
 # sample block for scripts
 script_win:
@@ -124,7 +147,7 @@ script_bash:
 environment_win:
   folder_in_environment: # referenced in path
     value: "xyz"
-    path: "C:/#REPLACE#"
+    path: "C:/..."
     help: "description"
   howto:
     value: "xyz"
@@ -133,11 +156,12 @@ environment_win:
     help: "description"
   valid_path:
     value: "xyz"
-    path: "C:/#REPLACE#"
+    path: "C:/<PATH_TO>PlantUML"
     help: "description"
+    export: value # exporting a value
   valid_file:
     value: "xyz"
-    file: "C:/#REPLACE#test.png"
+    file: "C:/<PATH_TO>PlantUML/test.png"
     help: "description"
   howto2:
     value: "xyz"
@@ -159,6 +183,10 @@ environment_bash:
 # refers to elements in
 # scripts, executables, documents section above
 shortcut:
+  cc_report:
+    file: cc_report_file
+    help: "ACTION: Creates the Configuration Report (Markdown Format)"
+    action: create_report # actions defined in constants.py
   cygwin:
     file: cygwin.exe
     path: sdsd
@@ -175,6 +203,33 @@ cmd_param:
   # command line options for notepad++
   cmdparam_notepadpp:
     help: "Notepad++ Command Line Input"
+    file:
+      param_short: f
+      param: file
+      default: null
+      help: "File to be opened"
+      metavar: "[file]"
+    line:
+      param_short: l
+      param: line
+      default: null
+      help: "Open File at submitted Line"
+      metavar: "[line]"
+    extra:
+      param_short: x
+      param: extra
+      default: null
+      help: "Extra parameters, will be appended to command"
+      metavar: "[..extra params..]"
+    todo:
+      param_short: ot
+      param: todo
+      dest: todo
+      action: "store_true"
+      help: "Opens todo.txt file"
+
+  cmdparam_vscode:
+    help: "VSCODE Command Line Input"
     file:
       param_short: f
       param: file
@@ -236,13 +291,19 @@ cmd_param:
 
   # main params template
   cmd_client_main:
-    help: "Main parameters for the cmd_client"  
-    sample_main_param:
+    help: "Main parameters for the cmd_client"
+    cc_report:
+      param_short: ccr
+      param: cc_report
+      dest: cc_report
+      action: "store_true"
+      help: "Create Command Center Configuration Report"
+    param_short:
       param_short: ps
       param: param_short
       default: null
       help: "Help Comment"
-      metavar: "[param_short]"    
+      metavar: "[param_short]"
 
   # parameters to be used as copy paste templates
   cmdparam_template:
@@ -279,21 +340,66 @@ cmd_subparser:
     subparse_cmd: cmdparam_template
   subparser_cmd_client:
     npp: cmdparam_notepadpp
+    vs: cmdparam_vscode
 # mapping command line items to configuration items
-# the key should be the same 
-# if nothing is mapped by default a resolved value will be 
+# the key should be the same
+# if nothing is mapped by default a resolved value will be
 # aadded as an additional field to the cmd configuration
-# default case should be a mapping to a pattern 
+# default case should be a mapping to a pattern
 cmd_map:
   cmdparam_notepadpp:  # mapping cmdparam_notepadpp params to a pattern
-    help: "Map Config Items to command pattern"
-    map: 
+    help: "Map Input Params to Notepad++"
+    map:
       type: pattern                 # this is the rule for how to map
       cmd_param: cmdparam_notepadpp # maps the command line params ..
       pattern: notepadpp            # .. to a specific pattern
-
-
-
-
-
-
+  cmdparam_vscode:  # mapping cmdparam_notepadpp params to a pattern
+    help: "Map Input Params to VSCode"
+    map:
+      type: pattern
+      cmd_param: cmdparam_vscode
+      pattern: vscode
+  cmd_client_main:  # mapping main client config options as action mapping
+    help: "Map Main Parameters to Commands"
+    map:
+      type: action                  # this indicates it's of generic action
+      cc_report:                    # input parameter (here we use cc_report flag)
+        type: shortcut              # .. look in configuration.yaml ...
+        key: cc_report              #  shortcut > cc_report
+# maps (boolean) shortcut commands to predefined values
+# see the example
+cmd_input_map:
+  default: # default values
+    help: "Maps the default parser arguments (`cmdparam_default`) to configuration"
+    dummy:
+      help: "Just a dummy map"
+      map:
+        - source:
+            type: file
+            param: cc_report_file
+            key: file
+          param: hugo
+        - source:
+            type: file
+            param: test_another_param
+            key: test
+          param: hugo2
+  main: # main subparser (will be evaluated when parser subcommand is None)
+    help: "Maps the main parser (`cmd_client_main`) to configuration"
+    param_short:   # this is the cmd parameter we want to dereference
+      map:                        # NOTE we use list of config dicts
+        - source:                 # here we set file parameter in the params
+            type: file            # use value from file > cc_report_file > file
+            param: cc_report_file
+            key: file
+          param: hugo             # map to output param
+  npp: # subparser alias as defined in cmd_subparser
+    help: "Maps the Notepad++ subparser (`cmdparam_notepadpp`) to configuration"
+    todo:
+      map:
+        - source:
+            type: path
+            param: cc_home
+            key: path
+          param: path
+      help: "Testing the map"
