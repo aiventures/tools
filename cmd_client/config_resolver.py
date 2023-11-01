@@ -410,11 +410,73 @@ class ConfigResolver():
                     logger.warning(f"Map {map_key} (used for {param_type}), Map Type {map_type} is not supported ")
         return {C.PATTERN_KEY:out_pattern,C.ACTION_KEY:out_action}
 
+    def _resolve_cmd_param_map(self,params_template:str,param_map:dict,parsed_args:dict)->None:
+        """ resolvve a single param map """
+
+        for map_param,map_param_info in param_map.items():
+            if not map_param_info:
+                continue
+            # try to find a mapping if parameter is supplied
+            if not parsed_args.get(map_param):
+                continue
+            logger.info(f"Mapping Params [{params_template}]>[{map_param}]")
+            mapping_list = map_param_info.get(C.MAP)
+            for mapping in mapping_list:
+                src = mapping.get(C.SOURCE,{})
+                config_type = src.get(C.TYPE)
+                config_param = src.get(C.PARAM_KEY)
+                key = src.get(C.KEY)
+                value = self.get_config_element(config_type,config_param,key,resolve=True)
+                if not value:
+                    logger.warning(f"No value found for Config [{config_type}>{config_param}>{key}]")
+                    continue
+                param = mapping.get(C.PARAM_KEY)
+                if not param:
+                    logger.warning(f"No param attribute found in input map, parameter [{map_param}] ")
+                    continue
+                # pass over value
+                logger.info(f"Mapping Params [{params_template}]>[{map_param}] to {param} ({value})")
+                if value:
+                    parsed_args[param] = value
+                # do a check / right now only issue warning if parameter is not in configuration
+                cmd_params = self.get_config_element(C.CMD_PARAM,params_template)
+                if isinstance(cmd_params,dict):
+                    cmd_params = list(cmd_params.keys())
+                    if param not in cmd_params:
+                        logger.warning(f"Map Input Param: No Config: {config_type}>{config_param}>{key} has no param [{param}]")
+
+    def _resolve_cmd_param_maps(self,cmd_params_key:str,parsed_args:dict,
+                          subparser_template:str=None,
+                          cmd_params_default:str="cmdparam_default")->None:
+        """ resolves input mapping  """
+        cmd_input_map = self.get_config_element(C.CMD_INPUT_MAP,{})
+
+        subparser_cmd = parsed_args.get(C.COMMAND)
+        subparser_map = {}
+        # get the cmd cofig template for the subcommand
+        cmd_params_subcommand = None
+        if subparser_cmd:
+            cmd_params_subcommand = self.get_config_element(C.CMD_SUBPARSER,
+                                                            subparser_template,
+                                                            subparser_cmd)
+        input_maps = {C.DEFAULT:cmd_params_default,
+                      C.MAIN:cmd_params_key,
+                      subparser_cmd:cmd_params_subcommand}
+        for input_map,map_key in input_maps.items():
+            if not map_key:
+                 continue
+            cmd_map = cmd_input_map.get(input_map,{})
+            self._resolve_cmd_param_map(map_key,cmd_map,parsed_args)
+
     def get_cmd_dict(self,cmd_params_key:str,parsed_args:dict,
                           subparser_template:str=None,
                           cmd_params_default:str="cmdparam_default")->dict:
         """ parses / returns the argparse params, blends in configuration, returns command line(s) as array """
         cmd_out = []
+        # MAP SHORTCUTS
+        self._resolve_cmd_param_maps(cmd_params_key,parsed_args,
+                           subparser_template,cmd_params_default)
+
         param_maps = self._resolve_argparser(cmd_params_key,parsed_args,
                            subparser_template,cmd_params_default)
         cmd_out = self._map_params2config(param_maps)
@@ -459,11 +521,15 @@ class ConfigResolver():
 
     def get_config_element(self,config:str,
                                 config_name:str=None,
-                                config_attribute:str=None):
+                                config_attribute:str=None,
+                                resolve:bool=False):
         """ returns a config element down the hierarchy according to hierarchy
             CONFIG > CONFIG_NAME (TEMPLATE SPECIFIC) > CONFIG_ATTRIBUTE
             If none is used the complete config substructure is used
+            if resolve is then resolved attribute values are returned 
         """
+        if not config:
+            return
         config_type_dict = self._config_dict.get(config,{})
         if not config_name:
             logger.debug(f"Returning Config {config}")
@@ -474,6 +540,20 @@ class ConfigResolver():
             return config_dict
         config_attribute = config_dict.get(config_attribute,None)
         logger.debug(f"Returning Config {config} > {config_name} > {config_attribute}")
+        # now try to resolve attributes
+        resolved = None
+        match config_attribute:
+            case C.FILE_KEY:
+                resolved = config_dict.get(C.RESOLVED_FILE)
+            case C.PATH_KEY:
+                resolved = config_dict.get(C.RESOLVED_PATH)
+            case C.EXPORT:
+                export_field = config_dict.get(C.EXPORT)
+                if not export_field:
+                    logger.warning(f"Couldn't find export field in configuration {config}>{config_name}")
+                resolved = config_dict.get(export_field)
+        if resolve and resolved:
+            config_attribute = resolved
         return config_attribute
 
     def get_pattern(self,name:str,**kwargs):
@@ -520,7 +600,7 @@ class ConfigResolver():
                     is_file_type = True
             # wrap os objects in quotes
             if is_file_type:
-                # wrap in quotes, do not do this in case we already have quotes in the pattern 
+                # wrap in quotes, do not do this in case we already have quotes in the pattern
                 logger.debug(f"Adding quotes for param {param_name} (file type)")
                 re_quotes=r"\"{\["+param_name
                 has_quotes=re.findall(re_quotes,pattern)

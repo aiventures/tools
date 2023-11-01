@@ -17,6 +17,7 @@ class CONFIG(Enum):
     CMD_PARAM = "Command Line Parameters for any template scripts"
     CMD_SUBPARSER = "Definition of Subparser Configuration"
     CMD_MAP = "Mapping Rules for assigning CLI command to Command"
+    CMD_INPUT_MAP = "Mapping Input Parameters to Config Values (can be used for shortcuts)"
 
 class EXPORT_OPTION(Enum):
     """ Exporting Options """
@@ -46,6 +47,9 @@ class CONFIG_ATTRIBUTE(Enum):
     MAP = "CMD CLI to Configuration Mapping Rule"
     COMMAND = "Subparser Shortcut (from Command line, empty if main parser is used)"
     CMDPARAM_DEFAULT = "Default CMD Params"
+    MAIN = "Main Element (for example main Parser)"
+    SOURCE = "Source Element"
+    TARGET = "Target Element"
 
 class ACTION(Enum)    :
     """ Predefined Actions to be performed, can be added to configuration """
@@ -91,12 +95,17 @@ class DEFAULT_PARSER_ATTRIBUTES(Enum):
     LOGLEVEL = "loglevel"
     ADD_TIMESTAMP = "add_timestamp"
 
+class CHANGE_LOG(Enum)    :
+    """ Change Log Items """
+    FILE_CREATED = "File(s) that were created"
+
 def key(enum:Enum):
     """ transforms an Enum key into lower case string """
     return enum.name.lower()
 
 PATH_KEY = key(CONFIG_ATTRIBUTE.PATH)
 FILE_KEY = key(CONFIG_ATTRIBUTE.FILE)
+
 EXECUTABLE_KEY = key(CONFIG_ATTRIBUTE.EXECUTABLE)
 TYPE = key(CONFIG_ATTRIBUTE.TYPE)
 REF_KEY = key(CONFIG_ATTRIBUTE.REFERENCE)
@@ -107,12 +116,18 @@ PATTERN_KEY = key(CONFIG_ATTRIBUTE.PATTERN)
 PARAM_KEY = key(CONFIG_ATTRIBUTE.PARAM)
 VALUE = key(CONFIG_ATTRIBUTE.VALUE)
 EXPORT = key(CONFIG_ATTRIBUTE.EXPORT)
+DEFAULT = key(CONFIG_ATTRIBUTE.DEFAULT)
 RESOLVED_DEFAULT = key(CONFIG_ATTRIBUTE.RESOLVED_DEFAULT)
 RESOLVED_MAIN = key(CONFIG_ATTRIBUTE.RESOLVED_MAIN)
 RESOLVED_SUBPARSER = key(CONFIG_ATTRIBUTE.RESOLVED_SUBPARSER)
 KEY = key(CONFIG_ATTRIBUTE.KEY)
 MAP = key(CONFIG_ATTRIBUTE.MAP)
+MAIN = key(CONFIG_ATTRIBUTE.MAIN)
+SOURCE = key(CONFIG_ATTRIBUTE.SOURCE)
+TARGET = key(CONFIG_ATTRIBUTE.TARGET)
+COMMAND = key(CONFIG_ATTRIBUTE.COMMAND)
 SCRIPT = key(CONFIG.SCRIPT)
+CMD_INPUT_MAP = key(CONFIG.CMD_INPUT_MAP)
 SCRIPT_BASH = key(CONFIG.SCRIPT_BASH)
 ENVIRONMENT_WIN = key(CONFIG.ENVIRONMENT_WIN)
 ENVIRONMENT_BASH = key(CONFIG.ENVIRONMENT_BASH)
@@ -122,3 +137,5 @@ CMD_SUBPARSER = key(CONFIG.CMD_SUBPARSER)
 CMD_MAP_KEY = key(CONFIG.CMD_MAP)
 ACTION_KEY = "action"
 ACTION_CREATE_REPORT = key(ACTION.CREATE_REPORT)
+FILE_CREATED = key(CHANGE_LOG.FILE_CREATED)
+
