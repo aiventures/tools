@@ -121,9 +121,9 @@ if __name__ == "__main__":
     CMD_VSCODE = "vs -f xyz -l 10" # open vs code with the same file at line 10
     CMD_REPORT = "--cc_report" # create a configuration report    
     CMD_NPP_TODO = "npp --todo -l 5" # open notepadplusplus with a fixed file defined in shortcut file
-    CMD_NPP_TODO2 = "npp --todo2 -l 5" # open notepadplusplus with calling pattern with predefined values
+    CMD_NPP_TODO3 = "npp --todo3 -l 5" # open notepadplusplus with calling pattern with predefined values
     # use one of the sample configs above
-    test_cmd = CMD_NPP_TODO2
+    test_cmd = CMD_NPP_TODO3
     if test_cmd:
         parsed_args = argparser.parse_args(test_cmd.split())
     else:

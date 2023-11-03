@@ -412,30 +412,51 @@ class ConfigResolver():
 
     def _resolve_cmd_param_map(self,params_template:str,param_map:dict,parsed_args:dict)->None:
         """ resolve a single param map """
-
         for map_param,map_param_info in param_map.items():
             if not map_param_info:
                 continue
             # try to find a mapping if parameter is supplied
             if not parsed_args.get(map_param):
                 continue
+            if not isinstance(map_param_info,dict):
+                continue
             logger.info(f"Mapping Params [{params_template}]>[{map_param}]")
-            mapping_list = map_param_info.get(C.MAP)
-            for mapping in mapping_list:
-                src = mapping.get(C.SOURCE,{})
-                config_type = src.get(C.TYPE)
-                config_param = src.get(C.PARAM_KEY)
-                key = src.get(C.KEY)
-                value = self.get_config_element(config_type,config_param,key,resolve=True)
-                if not value:
-                    logger.warning(f"No value found for Config [{config_type}>{config_param}>{key}]")
+            config_type = map_param_info.get(C.TYPE)
+            config_map = map_param_info.get(C.MAP,{})
+            pattern = map_param_info.get(C.PATTERN_KEY)
+            pattern_params = []
+            if pattern:
+                pattern_info = self.get_config_element(C.PATTERN_KEY,pattern,C.PARAM_KEY)
+                if pattern_info:
+                    pattern_params = list(pattern_info.keys())
+
+            # mapping_list = map_param_info.get(C.MAP)
+            for mapping in config_map:
+                if not isinstance(mapping,dict):
                     continue
+
                 param = mapping.get(C.PARAM_KEY)
                 if not param:
                     logger.warning(f"No param attribute found in input map, parameter [{map_param}] ")
                     continue
+
+                src = mapping.get(C.SOURCE,{})
+                config_param = src.get(C.PARAM_KEY)
+                key = src.get(C.KEY)
+                # we have a pattern, validate it against pattern
+                if key and pattern and not param in pattern_params:
+                    logger.warning(f"Key [{param}] is not in pattern {pattern}, check cmd_input_map config [{map_param}]")
+                    continue
+
+                # get the value
+                value = self.get_config_element(config_type,config_param,key,resolve=True)
+
+                s_param_path = f"[{config_type}>{config_param}>{key}]"
+                if not value:
+                    logger.warning(f"ARGPARSE [{map_param}]: No value found for Config {s_param_path}")
+                    continue
                 # pass over value
-                logger.info(f"Mapping Params [{params_template}]>[{map_param}] to {param} ({value})")
+                logger.info(f"ARGPARSE [{map_param}]: map {s_param_path}>[{param}] ({value})")
                 if value:
                     parsed_args[param] = value
                 # do a check / right now only issue warning if parameter is not in configuration
@@ -445,48 +466,11 @@ class ConfigResolver():
                     if param not in cmd_params:
                         logger.warning(f"Map Input Param: No Config: {config_type}>{config_param}>{key} has no param [{param}]")
 
-    def _resolve_cmd_param_map_pattern(self,params_template:str,param_map:dict,parsed_args:dict)->None:
-        """ resolvve a single param map pattern"""
-
-        for map_param,map_param_info in param_map.items():
-            if not isinstance(map_param_info,dict):
-                continue
-            # try to find a mapping if parameter is supplied
-            if not parsed_args.get(map_param):
-                continue
-            logger.info(f"Mapping Params [{params_template}]>[{map_param}]")
-            mapping_list = map_param_info.get(C.MAP)
-            pattern = map_param_info.get(C.PATTERN_KEY)
-            if not pattern:
-                logger.warning(f"Couldn't find pattern value in {C.CMD_INPUT_MAP_PATTERN}>{map_param}")
-                continue
-            pattern_info = self.get_config_element(C.PATTERN_KEY,pattern)
-            if not pattern_info:
-                logger.warning(f"Couldn't find pattern configuration for {pattern}, check pattern section")
-                continue
-            for param_mapping in mapping_list:
-                if not isinstance(param_mapping,dict):
-                    logger.warning(f"Param Mapping {map_param}, map is not correct, expected dict")
-                    continue
-                param = list(param_mapping.keys())[0]
-                # check if param exists in template                
-                pattern_param = pattern_info.get(C.PARAM_KEY,{}).get(param)
-                if not pattern_param:
-                    logger.warning(f"Parse param [{map_param}]: Param [{param}] not found in Pattern Template {params_template}")
-                    continue
-                src_keys = param_mapping.get(param,{})
-                kwargs = {"config":src_keys.get(C.TYPE),
-                          "config_name":src_keys.get(C.PARAM_KEY),
-                          "config_attribute":src_keys.get(C.KEY),
-                          "resolve":True   }
-                value = self.get_config_element(**kwargs)
-                if value:
-                    parsed_args[param]=value
-
     def _resolve_cmd_param_maps(self,cmd_params_key:str,parsed_args:dict,
                           subparser_template:str=None,
                           cmd_params_default:str="cmdparam_default")->None:
         """ resolves input mapping  """
+
         cmd_input_map = self.get_config_element(C.CMD_INPUT_MAP,{})
 
         subparser_cmd = parsed_args.get(C.COMMAND)
@@ -506,31 +490,6 @@ class ConfigResolver():
             cmd_map = cmd_input_map.get(input_map,{})
             self._resolve_cmd_param_map(map_key,cmd_map,parsed_args)
 
-    def _resolve_cmd_param_pattern_maps(self,cmd_params_key:str,parsed_args:dict,
-                          subparser_template:str=None,
-                          cmd_params_default:str="cmdparam_default")->None:
-        """ resolves input mapping  """
-        # TODO Implement
-        pass
-        cmd_input_map_pattern = self.get_config_element(C.CMD_INPUT_MAP_PATTERN,{})
-
-        subparser_cmd = parsed_args.get(C.COMMAND)
-        subparser_map = {}
-        # get the cmd cofig template for the subcommand
-        cmd_params_subcommand = None
-        if subparser_cmd:
-            cmd_params_subcommand = self.get_config_element(C.CMD_SUBPARSER,
-                                                            subparser_template,
-                                                            subparser_cmd)
-        input_maps = {C.DEFAULT:cmd_params_default,
-                      C.MAIN:cmd_params_key,
-                      subparser_cmd:cmd_params_subcommand}
-        for input_map,map_key in input_maps.items():
-            if not map_key:
-                continue
-            cmd_map = cmd_input_map_pattern.get(input_map,{})
-            self._resolve_cmd_param_map_pattern(map_key,cmd_map,parsed_args)
-
     def get_cmd_dict(self,cmd_params_key:str,parsed_args:dict,
                           subparser_template:str=None,
                           cmd_params_default:str="cmdparam_default")->dict:
@@ -538,9 +497,6 @@ class ConfigResolver():
         cmd_out = []
         # MAP SHORTCUTS
         self._resolve_cmd_param_maps(cmd_params_key,parsed_args,
-                           subparser_template,cmd_params_default)
-        # MAP SHORTCUTS TO PATTERNS
-        self._resolve_cmd_param_pattern_maps(cmd_params_key,parsed_args,
                            subparser_template,cmd_params_default)
 
         param_maps = self._resolve_argparser(cmd_params_key,parsed_args,
@@ -658,6 +614,8 @@ class ConfigResolver():
                     params_dict[param_name]=param_dict.get(C.VALUE)
         # overwrite any default values using kwargs
         for param_name,param_value in kwargs.items():
+            if not param_value:
+                continue
             param_spec = pattern_params.get(param_name)
             is_file_type = False
             if param_spec:
