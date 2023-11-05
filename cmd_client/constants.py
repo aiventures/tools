@@ -9,7 +9,7 @@ class CONFIG(Enum):
     PATTERN = "Generating Commands based on Patterns"
     PATH = "Links to frequently used Paths"
     FILE = "Links to frequently used Files"
-    SCRIPT = "Links to Win Scripts like shell scripts, bat files"
+    SCRIPT_WIN = "Links to Win Scripts like shell scripts, bat files"
     SCRIPT_BASH = "Links to Bash Scripts"
     ENVIRONMENT_WIN = "Environment Variables (SET) for Windows Command Line"
     ENVIRONMENT_BASH = "Environment Variables (SET) for Bash Command Line"
@@ -127,7 +127,7 @@ MAIN = key(CONFIG_ATTRIBUTE.MAIN)
 SOURCE = key(CONFIG_ATTRIBUTE.SOURCE)
 TARGET = key(CONFIG_ATTRIBUTE.TARGET)
 COMMAND = key(CONFIG_ATTRIBUTE.COMMAND)
-SCRIPT = key(CONFIG.SCRIPT)
+SCRIPT_WIN = key(CONFIG.SCRIPT_WIN)
 CMD_INPUT_MAP = key(CONFIG.CMD_INPUT_MAP)
 CMD_INPUT_MAP_PATTERN  = key(CONFIG.CMD_INPUT_MAP_PATTERN)
 SCRIPT_BASH = key(CONFIG.SCRIPT_BASH)

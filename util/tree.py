@@ -168,7 +168,6 @@ class Tree():
     def get_predecessors(self,node_id)->list:
         """ gets the parent nodes in a list """
         parents=[]
-        logger.debug("Get Parent Nodes")
         current_node=self._hierarchy_nodes_dict.get(node_id)
         while current_node is not None:
             parent_id=current_node[self._parent_field]
@@ -206,6 +205,21 @@ class Tree():
             siblings=[elem for elem in siblings if is_leaf(elem)]
 
         return siblings
+
+    def get_key_path(self,node_id):
+        """ returns the keys list required to navigate to the element """
+        keys = []
+        # get all predecessors
+        predecessor_ids = self.get_predecessors(node_id)
+        node_ids = [node_id,*predecessor_ids]
+        for id in node_ids:
+            tree_elem = self.get_element(id) 
+            if not self._name_field:
+                keys.append(tree_elem["node"])
+            else:
+                keys.append(tree_elem[self._name_field])
+        keys.reverse()
+        return keys
 
     def get_leaves(self)->list:
         """ returns the leaves of the tree """
@@ -256,7 +270,7 @@ class Tree():
         get_next_nodes_recursive(nested_tree)
         return nested_tree
 
-    def get_reverse_tree_elemsents(self)->dict:
+    def get_reverse_tree_elements(self)->dict:
         """ gets the elements dict of nested tree elements """
         logger.info("Get reverse nested Tree")
         nested_tree = self.get_nested_tree()
@@ -276,12 +290,20 @@ class Tree():
         get_next_nodes_recursive(reverse_tree)
         return reverse_tree
 
+    def get_element(self,node_id):
+        """ returns the element for given node id"""
+        element = self._nodes_dict.get(node_id)
+        if not element:
+            logger.warning(f"Element with node id {node_id} not found in tree")
+            return
+        return element
+
     def json(self)->str:
         """ returns json string """
         logger.debug("json()")
         nested_tree=self.get_nested_tree()
         return json.dumps(nested_tree,indent=3)
-    
+
     def yaml(self)->str:
         """ returns yaml string """
         logger.debug("yaml()")
@@ -289,14 +311,14 @@ class Tree():
         return yaml.dump(nested_tree)
 
     def __str__(self)->str:
-        return self.json()            
+        return self.json()
 
 if __name__ == "__main__":
     loglevel=logging.DEBUG
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
                         level=loglevel, stream=sys.stdout,datefmt="%Y-%m-%d %H:%M:%S")
     tree={
-        1:{"parent":None},
+        1:{"parent":None,"value":"value 1"},
         2:{"parent":1},
         4:{"parent":2},
         5:{"parent":2},
@@ -307,7 +329,21 @@ if __name__ == "__main__":
         9:{"parent":6},
     }
 
+    tree={
+        1:{"parent":None,"value":"value 1"},
+        2:{"parent":1,"value":"value 3"},
+        4:{"parent":2,"value":"value 4"},
+        5:{"parent":2,"value":"value 5"},
+        3:{"parent":1,"value":"value 3"},
+        6:{"parent":3,"value":"value 6"},
+        7:{"parent":6,"value":"value 7"},
+        8:{"parent":6,"value":"value 8"},
+        9:{"parent":6,"value":"value 9"},
+    }
+
     my_tree=Tree()
+    # use name to get a different field 
+    # my_tree.create_tree(tree,name_field="value")
     my_tree.create_tree(tree)
     my_root=my_tree.root_id
     my_hierarchy=my_tree.hierarchy
@@ -320,7 +356,9 @@ if __name__ == "__main__":
     my_leaves=my_tree.get_leaves()
     my_leave_siblings=my_tree.get_leaf_siblings()
     my_nested_tree=my_tree.get_nested_tree()
-    my_reverse_tree=my_tree.get_reverse_tree_elemsents()
+    my_reverse_tree=my_tree.get_reverse_tree_elements()
+    my_element = my_tree.get_element(4)
+    my_key_path = my_tree.get_key_path(7)
     # display tree as json
     #print("TREE AS JSON")
     #print(json.dumps(my_nested_tree,indent=3))

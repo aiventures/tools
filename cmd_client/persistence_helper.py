@@ -7,6 +7,8 @@ from datetime import datetime as DateTime
 import json
 import yaml
 from yaml import CLoader
+from yaml.composer import Composer
+from yaml.constructor import Constructor
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,7 @@ class PersistenceHelper():
     NUM_COL_TITLE = "num" # csv column title for number
     ID_TITLE = "id" # column name of object header
     TEMPLATE_DEFAULT_VALUE = "undefined" # default value for template value
+    LINE_KEY = "line" # dict key for lines attribute when reading yaml
 
     ALLOWED_FILE_TYPES = ["yaml","txt","json","plantuml"]
 
@@ -38,6 +41,7 @@ class PersistenceHelper():
         # get more params form kwargs
         self._dec_sep = kwargs.get("dec_sep",",")
         self._csv_sep = kwargs.get("csv_sep",";")
+        self
         self._add_timestamp = kwargs.get("add_timestamp",False)
 
         logger.debug(f"Decimal Separator: {self._dec_sep}, CSV Separator: {self._csv_sep}")
@@ -312,8 +316,36 @@ class PersistenceHelper():
         return lines
 
     @staticmethod
-    def read_yaml(filepath:str)->dict:
-        """ Reads YAML file"""
+    def read_yaml(filepath:str,line_key:str=None)->dict:
+        """ Reads YAML file (optionally with line numbers)"""
+        # https://stackoverflow.com/questions/13319067
+
+        def compose_node(parent, index):
+            # the line number where the previous token has ended (plus empty lines)
+            line = loader.line
+            node = Composer.compose_node(loader, parent, index)
+            node.__line__ = line + 1
+            return node
+        
+        def construct_mapping(node, deep=False):
+            mapping = Constructor.construct_mapping(loader, node, deep=deep)
+            mapping[line_key] = str(node.__line__)
+            return mapping
+
+        if not os.path.isfile(filepath):
+            logger.warning(f"File path {filepath} does not exist. Exiting...")
+            return None
+        loader = yaml.Loader(open(filepath,encoding='utf-8').read())
+        if line_key:            
+            loader.compose_node = compose_node
+            loader.construct_mapping = construct_mapping
+        data = loader.get_single_data()
+        return data
+
+    @staticmethod
+    def read_yaml_old(filepath:str,)->dict:
+        """ Reads YAML file """
+
         if not os.path.isfile(filepath):
             logger.warning(f"File path {filepath} does not exist. Exiting...")
             return None
@@ -367,8 +399,10 @@ class PersistenceHelper():
                 logger.error(f"Exception writing file {filepath}",exc_info=True)
             return None
 
-    def read(self):
-        """ read file, depending on file extension """
+    def read(self,line_key:str=None):
+        """ read file, depending on file extension 
+            for yaml, lines in in filecan be read
+        """
         if not self._f_read:
             logger.error("No file found")
             return
@@ -380,7 +414,7 @@ class PersistenceHelper():
             if suffix == "csv":
                 out = self._csv2dict(out)
         elif suffix == "yaml":
-            out = PersistenceHelper.read_yaml(self._f_read)
+            out = PersistenceHelper.read_yaml(self._f_read,line_key)
         elif suffix == "json":
             out = PersistenceHelper.read_json(self._f_read)
         else:

@@ -66,7 +66,7 @@ class Config():
                         C.EXECUTABLE_KEY,
                         C.FILE_KEY,
                         C.PATH_KEY,
-                        C.SCRIPT,
+                        C.SCRIPT_WIN,
                         C.SCRIPT_BASH,
                         C.ENVIRONMENT_WIN,
                         C.ENVIRONMENT_BASH,
