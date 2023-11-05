@@ -22,7 +22,7 @@ class PersistenceHelper():
     TEMPLATE_DEFAULT_VALUE = "undefined" # default value for template value
     LINE_KEY = "line" # dict key for lines attribute when reading yaml
 
-    ALLOWED_FILE_TYPES = ["yaml","txt","json","plantuml"]
+    ALLOWED_FILE_TYPES = ["yaml","txt","json","plantuml","md"]
 
     def __init__(self,f_read:str=None,f_save:str=None,**kwargs) -> None:
         """ constructor """
@@ -475,7 +475,7 @@ class PersistenceHelper():
         p = Path(f_save)
         suffix = p.suffix[1:].lower()
 
-        if suffix in ["txt","plantuml","csv"]:
+        if suffix in ["txt","plantuml","csv","md"]:
             if isinstance(data,list):
                 try:
                     data = "\n".join(data)

@@ -3,6 +3,7 @@ import sys
 import os
 import logging
 from pathlib import Path
+from datetime import datetime as DateTime
 
 from tools.util.recurse_dict import DictParser
 # from tools.util.tree import Tree
@@ -18,6 +19,7 @@ KEY_PATH = "key_path"
 VALUE = "value"
 IS_PATH = "is_path"
 IS_FILE = "is_file"
+OS_OBJECT = "os_object"
 RESOLVED_PATH = "resolved_path"
 RESOLVED_FILE = "resolved_file"
 REFERENCE = "REFERENCE"
@@ -451,6 +453,68 @@ class ConfigValidator():
         """ gets the config tree """
         return self._config_dict.tree
 
+    def _report_get_objects(self)->dict:
+        """ get objects as output data """
+
+        out_dict = {WARNING:{},OS_OBJECT:{},C.VALUE:{}}
+
+        def resolve_os_object(info:dict)->str:
+            """ resolves item whether it is a foile object """
+            file_object = None
+            file_object = info.get(C.RESOLVED_FILE)
+            if not file_object:
+                file_object = info.get(C.RESOLVED_PATH)
+            return file_object
+
+        line = 1
+        for leaf_id,leaf_info in self._config_leaves.items():
+            if leaf_info.get(LINE_KEY):
+                line = leaf_info.get(LINE_KEY)
+            value = leaf_info.get(C.VALUE)
+            title=f"**(L{line.zfill(3)})** `[{leaf_id}]`"
+            os_object = resolve_os_object(leaf_info)
+            warning = leaf_info.get(WARNING)
+            if warning:
+                info = f"* {title}: {warning}  "
+                type = WARNING
+            elif os_object:
+                info = f"* {title}: {value} ({os_object})  "
+                type = OS_OBJECT
+            else:
+                info = f"* {title}: {value}  "
+                type  = C.VALUE
+            info_dict = out_dict.get(type)
+            info_dict[line]=info
+
+        return out_dict
+
+    def create_report(self,)->list:
+        """ outputs report file lines """
+        toc = []
+        lines = []
+        out = ["# TOC"]
+        ref_toc="[TOC](#toc)"
+        out_dict = self._report_get_objects()
+        sections = {WARNING:"WARNINGS",OS_OBJECT:"OS OBJECTS",C.VALUE:"OTHER VALUES"}
+        for section_id,section_title in sections.items():
+            title = f"# {section_title}"
+            lines.append(title)
+            link = section_title.lower()
+            link = "#"+link.replace(" ","-")
+            toc.append(f"* [{section_title}]({link})")
+            section_lines = out_dict.get(section_id,[])
+            section_keys = sorted([int(i) for i in section_lines.keys()])
+            for key in section_keys:
+                line = section_lines.get(str(key))
+                lines.append(line)
+            lines.append(ref_toc)
+            lines.append("----")
+        out.extend(toc)
+        out.extend(lines)
+        out.append(f"CREATED: {DateTime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        self._persistence.save("\n".join(out))
+        return out
+
 if __name__ == "__main__":
     loglevel = logging.INFO
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
@@ -459,4 +523,5 @@ if __name__ == "__main__":
     f_validation = VALIDATION_REPORT
     validator = ConfigValidator(f_config,f_validation)
     validator.check()
+    out = validator.create_report()
     pass
