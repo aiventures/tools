@@ -30,7 +30,7 @@ ACTIONS = EnumHelper.keys(C.ACTION,lower=True)
 LINE_KEY = PersistenceHelper.LINE_KEY
 
 class ConfigValidator():
-    """ Template """
+    """ Validator Main Class  """
     def __init__(self,f_config:str,f_validation:str=None) -> None:
         """ Constructor """
         self._persistence = PersistenceHelper(f_config,f_validation)

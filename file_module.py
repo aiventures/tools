@@ -132,6 +132,8 @@ def md2toc(f:str,as_string:bool=True):
     """ reads contents of a markdown file, extracts header lines to table of contents
         returns header lines as string or list
     """
+    RE_SPECIAL_CHARS="[\\\;:().,;/]"
+
     REGEX_HEADER = "^(#+) (.+)\n"
     REGEX_LINK = r"\[(.+)\]\(.+\)"
     MD_ANCHOR = "[_LABEL_](#_LINK_)"
@@ -144,9 +146,12 @@ def md2toc(f:str,as_string:bool=True):
             level=len(match[0][0])
             label=match[0][1].strip()
             link_text = re.findall(REGEX_LINK,label)
-            if link_text:
+            if link_text:            
                 label = link_text[0]
-            link=label.replace(" ","-").lower()
+            
+            # replace special characters 
+            link=re.sub(RE_SPECIAL_CHARS,"",label)
+            link=link.replace(" ","-").lower()
             anchor_link=MD_ANCHOR.replace("_LABEL_",label)
             anchor_link=anchor_link.replace("_LINK_",link)
             out_string=(level-1)*MD_INDENT*" "+"* "+anchor_link+" "*MD_INDENT
@@ -240,7 +245,20 @@ def print_file_info(file_info_dict):
                         logger.debug(str(content).encode('utf-8').decode('ascii','ignore'))
     return None
 
+def test():
+    """ Spielwiese """
+    s = r"safkjh ; asfh/faj af\kj)ha(fs j"
+    print(s)
+    # regex for special characters
+    re_char = "[\\\;:().,;/]"
+    result = re.findall(re_char,s)
+    result2 = re.sub(re_char,"",s)
+    result2 = result2.replace(" ","-")
+    pass
+                    
+
 if __name__ == "__main__":
     loglevel = logging.INFO
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
                         level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")    
+    test()
