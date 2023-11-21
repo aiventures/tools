@@ -6,12 +6,14 @@ from pathlib import Path
 import logging
 import sys
 from enum import Enum
-from datetime import datetime as DateTime
 from copy import deepcopy
 
 import tools.cmd_client.constants as C
+from tools.cmd_client.utils import Utils as U
 from tools.cmd_client.enum_helper import EnumHelper
 from tools.cmd_client.persistence_helper import PersistenceHelper
+from tools.cmd_client.action_resolver import ActionResolver
+
 
 logger = logging.getLogger(__name__)
 class ConfigResolver():
@@ -23,7 +25,7 @@ class ConfigResolver():
     REGEX_PARAM=r"\[.+?\]"
     REGEX_PLACEHOLDER=r"\{.+?\}"
 
-    def __init__(self,config_dict:dict) -> None:
+    def __init__(self,config_dict:dict,action_resolver:ActionResolver) -> None:
         """ constructor """
         self._config_dict = config_dict
         if not config_dict:
@@ -31,10 +33,12 @@ class ConfigResolver():
             return
         self.FILE_TYPES = [C.PATH_KEY,C.FILE_KEY,C.EXECUTABLE_KEY]
         self._config_types = self.get_config_types()
-
+        self._action_resolver = action_resolver
         # put together all files and paths, resolve
         self._resolve_references()
         self._resolve_patterns()
+        self._action_resolver.config_dict = self._config_dict
+        pass
 
     @staticmethod
     def get_filled_pattern(pattern,**kwargs):
@@ -131,7 +135,7 @@ class ConfigResolver():
             if os.path.isdir(path):
                 return os.path.abspath(path)
             # now resolve the path variable if given
-            resolved_path = self.get_config_element(C.PATH_KEY,path,C.RESOLVED_PATH)
+            resolved_path = self._get_config_element(C.PATH_KEY,path,C.RESOLVED_PATH)
             return resolved_path
         else:
             return
@@ -150,9 +154,39 @@ class ConfigResolver():
                 logger.warning(f"Validated File {out_file} does not exist")
         # no path is given, try to get from dereferencing file
         elif file is not None and path is None:
-            out_file = self.get_config_element(C.FILE_KEY,file,C.RESOLVED_FILE)
+            out_file = self._get_config_element(C.FILE_KEY,file,C.RESOLVED_FILE)
 
         return out_file
+
+    def _resolve_indirect_config(self,name:str,config:dict)->str:
+        """ tries to resolve indirect link from config """
+        config_dict = self._config_dict
+        path_config = config_dict.get(C.PATH_KEY,{})
+        file_config = config_dict.get(C.FILE_KEY,{})
+        exec_config = config_dict.get(C.EXECUTABLE_KEY,{})
+        path_key = config.get(C.PATH_KEY,"###")
+        file_key = config.get(C.FILE_KEY,"###")
+        exec_key = config.get(C.EXECUTABLE_KEY,"###")
+        if not os.path.isdir(path_key):
+            path_resolved = path_config.get(path_key,{}).get(C.RESOLVED_PATH)
+        else:
+            path_resolved = path_key
+        if not os.path.isfile(file_key):
+            file_resolved = file_config.get(file_key,{}).get(C.RESOLVED_FILE)
+        else:
+            file_resolved = file_key
+        if not os.path.isfile(exec_key):            
+            exec_resolved = exec_config.get(exec_key,{}).get(C.RESOLVED_FILE)
+        else:
+            exec_resolved = exec_key
+        if exec_resolved:
+            return exec_resolved
+        elif file_resolved:
+            return file_resolved
+        elif path_resolved:
+            return path_resolved
+        else:
+            return None
 
     def _resolve_config(self,config_category_enum:Enum)->None:
         """ Resolves a configuration item   """
@@ -163,6 +197,7 @@ class ConfigResolver():
             return
 
         for name,config in config_category_dict.items():
+            keys = list(config.keys())
             # replace reference config if set
             #reference_config = config.get(ref_key)
             #if not reference_config:
@@ -173,6 +208,16 @@ class ConfigResolver():
             file = self._resolve_item(config_category_enum,
                                       reference_config,C.FILE_KEY)
             file = self._validated_file(file,path)
+            # try to resolve from indirect link
+            if not path and C.PATH_KEY in keys:
+                path = self._resolve_indirect_config(name,config)
+            # try to resolve from indirect link
+            if not file:
+                if C.EXECUTABLE_KEY in keys or C.FILE_KEY in keys:
+                    file = self._resolve_indirect_config(name,config)
+            if file and not path:
+                path = str(Path(file).parent)
+
             config[C.RESOLVED_PATH] = path
             config[C.RESOLVED_FILE] = file
             if not path and file:
@@ -187,6 +232,7 @@ class ConfigResolver():
                          C.CONFIG.PATH,
                          C.CONFIG.FILE,
                          C.CONFIG.EXECUTABLE,
+                         C.CONFIG.CONFIGURATION
                          ]
         # start with path, file, executable
         self._resolve_config(C.CONFIG.PATH)
@@ -257,7 +303,7 @@ class ConfigResolver():
         type_cmdparam = C.key(C.CONFIG.CMD_PARAM)
         DEFAULT = C.key(C.CONFIG_ATTRIBUTE.DEFAULT)
         # get the params dict
-        cmd_param_dict = self.get_config_element(config=type_cmdparam,
+        cmd_param_dict = self._get_config_element(config=type_cmdparam,
                                                  config_name=cmd_params_key)
         if not cmd_param_dict:
             logger.warning(f"Couldn't find cmd_param > [{cmd_params_key}]")
@@ -272,10 +318,10 @@ class ConfigResolver():
                 value = cmd_info.get(DEFAULT)
             resolved[cmd_param] = value
 
-        # also retrieve the argparse-config map (right now only pattern makes sense)
+        # also retrieve the argparse-config map
         type_cmdmap = C.key(C.CONFIG.CMD_MAP)
         MAP = C.key(C.CONFIG_ATTRIBUTE.MAP)
-        cmd_map = self.get_config_element(config=type_cmdmap,
+        cmd_map = self._get_config_element(config=type_cmdmap,
                                           config_name=cmd_params_key)
         resolved[MAP]=cmd_map
         logger.debug(f"Resolved Params for {cmd_params_key}: {list(resolved.keys())}")
@@ -285,7 +331,7 @@ class ConfigResolver():
         """ replaces any aliases by its  resolved values if there are any"""
         # get the pattern
         out_dict = deepcopy(params_dict)
-        pattern_dict_params = self.get_config_element(config=C.PATTERN_KEY,
+        pattern_dict_params = self._get_config_element(config=C.PATTERN_KEY,
                                                       config_name=pattern_key)
         pattern_dict_params = pattern_dict_params.get(C.PARAM_KEY)
         if not pattern_dict_params:
@@ -309,7 +355,7 @@ class ConfigResolver():
                 case _:
                     resolved_value = pattern_info.get(C.VALUE)
             # check if the passed value is pointing to a configuration item
-            config_dict = self.get_config_element(config=param_type, config_name=value)
+            config_dict = self._get_config_element(config=param_type, config_name=value)
             if config_dict:
                 logger.debug(f"Pattern {pattern_key}, key {key}, config value {value} points to a config item")
                 match param_type:
@@ -327,72 +373,76 @@ class ConfigResolver():
 
         return out_dict
 
-    def _action_report(self,action_info:dict):
-        """ creates the configuration report """
-        file_ref = action_info.get(C.RESOLVED_FILE)
-        if not file_ref:
-            logger.warn("There is no resolved file path for Action report, check config")
-        return {C.RESOLVED_FILE:file_ref}
-
-    def _resolve_action(self,action,action_info:dict):
-        """ resolve specific actions """
-        match action:
-            case C.ACTION_CREATE_REPORT:
-                return {action:self._action_report(action_info)}
-            case _:
-                logger.info(f"{action} is no valid action")
-
     def _resolve_actions(self,param_type:str,param_info_dict:dict)->dict:
-        """ try to perform actions from configuration mapping """
+        """ try to reolve  actions from configuration mapping """
         # get known actions
         actions = EnumHelper.keys(C.ACTION,lower=True)
         actions_dict = {}
         logger.info(f"Resolving actions for {param_type}")
-        map_dict = param_info_dict.get(C.VALUE,{}).get(C.MAP,{}).get(C.MAP)
+        map_dict = param_info_dict.get(C.VALUE,{}).get(C.MAP,{}).get(C.MAP,{})
+        if map_dict is None:
+            logger.info("No action mapping defined")
+            return
+
         param_info_dict = param_info_dict.get(C.VALUE,{})
+        # check for each argparse parameter whether there is an action mapping
         for p_name,p_info in param_info_dict.items():
+            if not p_info: # option was not chosen, skip
+                continue
             action_map = map_dict.get(p_name)
             if not action_map:
                 continue
-            config_type = action_map.get(C.TYPE)
-            config_key = action_map.get(C.KEY)
-            config_dict = self.get_config_element(config_type,config_key)
-            action = config_dict.get(C.ACTION_KEY)
-            if not p_info: # option was not chosen, skip
-                continue
-            logger.debug(f"Resolve Action {action} from {config_type}>{config_key}")
+            # try to map all actions params cmd_map > .. map > [argaprse] > param
+            action = action_map.get(C.ACTION_KEY)
+            config_dict = {}
+            action_params = action_map.get(C.PARAM_KEY,{})
+            for action_param,action_param_info in action_params.items():
+                a_type = action_param_info.get(C.TYPE)
+                a_param = action_param_info.get(C.PARAM_KEY)
+                a_key = action_param_info.get(C.KEY)
+                value = self._get_config_element(a_type,a_param,a_key,resolve=True)
+                config_dict[action_param] = value
+
+            logger.debug(f"Arg Parse [{p_name}], Resolve Action {action}")
             if not action:
-                logger.warning(f"There is no action in Configuration {config_type}>{config_key}")
+                logger.warning(f"There is no action in Configuration {param_type}>{p_name}")
                 continue
             if not action in actions:
-                logger.warning(f"Action {action} is not defined in ACTION Enum, check")
-                continue
-            action_dict = self._resolve_action(action,config_dict)
+                logger.info(f"Action {action} is not defined in (standard) ACTION Enum")
+            # return the resolved action (action key alongside with variables)
+            action_dict = self._action_resolver.resolve_action(action,config_dict)
             actions_dict.update(action_dict)
 
         return actions_dict
 
     def _map_params2config(self,param_maps:dict)->dict:
-        """ map resolved params from input / parseargs to configuration """
-        out = {}
+        """ map resolved params from input / parseargs to configuration
+            default, main, custom maps (section cmd_map)
+        """
+        # out = {}
         out_pattern = {}
         out_action = {}
+        # resolved values
+        # resolved_default, resolved_main, resolved_subparser
         for param_type,param_info in param_maps.items():
-            cmd = None
+            # cmd = None
+            # cmd_map > [configuration]
             map_key = param_info.get(C.KEY)
             map_dict = param_info.get(C.VALUE,{}).get(C.MAP,{}).get(C.MAP)
             if not map_dict:
                 logger.debug(f"No map Info for Param Configuration {param_type}")
                 continue
             logger.debug(f"Map [{param_type}], cmd map [{map_key}]")
+
             # now do the confugration value mapping
             map_type = map_dict.get(C.TYPE)
             if not map_type in EnumHelper.keys(C.CMD_MAP,lower=True):
                 logger.warning(f"Map {map_key} (used for {param_type}), map type {map_type} is not supported")
                 continue
-            # get the params dict
+            # get the params dict from argparse
             params_dict = param_info.get(C.VALUE)
             # apply mapping rules
+            # TODO CHECK WHETHER THE ACTION KEY NEEDS TO BE PART OF THE MAP
             match map_type:
                 case C.PATTERN_KEY:
                     pattern_key = map_dict.get(C.PATTERN_KEY)
@@ -402,7 +452,13 @@ class ConfigResolver():
                     pattern = self.get_pattern(pattern_key,**params_dict)
                     if pattern:
                         out_pattern[param_type]=pattern
+                case C.MULTIPLE: # map multiple items
+                    resolved_actions = self._resolve_actions(param_type,param_info)
+                    if resolved_actions:
+                        out_action.update(resolved_actions)
                 case C.ACTION_KEY: # generic mapping of input params to configuration
+                    # TODO Do The Action handling in CONFIG
+                    # test single action
                     resolved_actions = self._resolve_actions(param_type,param_info)
                     if resolved_actions:
                         out_action.update(resolved_actions)
@@ -426,7 +482,7 @@ class ConfigResolver():
             pattern = map_param_info.get(C.PATTERN_KEY)
             pattern_params = []
             if pattern:
-                pattern_info = self.get_config_element(C.PATTERN_KEY,pattern,C.PARAM_KEY)
+                pattern_info = self._get_config_element(C.PATTERN_KEY,pattern,C.PARAM_KEY)
                 if pattern_info:
                     pattern_params = list(pattern_info.keys())
 
@@ -449,7 +505,7 @@ class ConfigResolver():
                     continue
 
                 # get the value
-                value = self.get_config_element(config_type,config_param,key,resolve=True)
+                value = self._get_config_element(config_type,config_param,key,resolve=True)
 
                 s_param_path = f"[{config_type}>{config_param}>{key}]"
                 if not value:
@@ -460,7 +516,7 @@ class ConfigResolver():
                 if value:
                     parsed_args[param] = value
                 # do a check / right now only issue warning if parameter is not in configuration
-                cmd_params = self.get_config_element(C.CMD_PARAM,params_template)
+                cmd_params = self._get_config_element(C.CMD_PARAM,params_template)
                 if isinstance(cmd_params,dict):
                     cmd_params = list(cmd_params.keys())
                     if param not in cmd_params:
@@ -471,14 +527,14 @@ class ConfigResolver():
                           cmd_params_default:str="cmdparam_default")->None:
         """ resolves input mapping  """
 
-        cmd_input_map = self.get_config_element(C.CMD_INPUT_MAP,{})
+        cmd_input_map = self._get_config_element(C.CMD_INPUT_MAP,{})
 
         subparser_cmd = parsed_args.get(C.COMMAND)
-        subparser_map = {}
+        # subparser_map = {}
         # get the cmd cofig template for the subcommand
         cmd_params_subcommand = None
         if subparser_cmd:
-            cmd_params_subcommand = self.get_config_element(C.CMD_SUBPARSER,
+            cmd_params_subcommand = self._get_config_element(C.CMD_SUBPARSER,
                                                             subparser_template,
                                                             subparser_cmd)
         input_maps = {C.DEFAULT:cmd_params_default,
@@ -486,7 +542,7 @@ class ConfigResolver():
                       subparser_cmd:cmd_params_subcommand}
         for input_map,map_key in input_maps.items():
             if not map_key:
-                 continue
+                continue
             cmd_map = cmd_input_map.get(input_map,{})
             self._resolve_cmd_param_map(map_key,cmd_map,parsed_args)
 
@@ -501,6 +557,7 @@ class ConfigResolver():
 
         param_maps = self._resolve_argparser(cmd_params_key,parsed_args,
                            subparser_template,cmd_params_default)
+        # TODO call this this in configuration
         cmd_out = self._map_params2config(param_maps)
         return cmd_out
 
@@ -526,7 +583,7 @@ class ConfigResolver():
                 return {}
             # get the params template
             type_subparser = C.key(C.CONFIG.CMD_SUBPARSER)
-            cmd_params_subparse = self.get_config_element(type_subparser,
+            cmd_params_subparse = self._get_config_element(type_subparser,
                                                     subparser_template,
                                                     subparser_key)
             resolved_subparse = self._resolve_cmd(cmd_params_subparse,parsed_args)
@@ -541,45 +598,29 @@ class ConfigResolver():
         out[C.RESOLVED_SUBPARSER]=mapped
         return out
 
-    def get_config_element(self,config:str,
-                                config_name:str=None,
-                                config_attribute:str=None,
-                                resolve:bool=False):
+    def _get_config_element(self,config:str,config_name:str=None,
+                           config_attribute:str=None,resolve:bool=False,):
         """ returns a config element down the hierarchy according to hierarchy
             CONFIG > CONFIG_NAME (TEMPLATE SPECIFIC) > CONFIG_ATTRIBUTE
             If none is used the complete config substructure is used
             if resolve is then resolved attribute values are returned
         """
-        if not config:
-            return
-        config_type_dict = self._config_dict.get(config,{})
-        if not config_name:
-            logger.debug(f"Returning Config {config}")
-            return config_type_dict
-        config_dict = config_type_dict.get(config_name,{})
-        if not config_attribute:
-            logger.debug(f"Returning Config {config} > {config_name}")
-            return config_dict
-        value = config_dict.get(config_attribute,None)
-        logger.debug(f"Returning Config {config} > {config_name} > {config_attribute} > {value}")
-        # now try to resolve attributes
-        resolved = None
-        match config_attribute:
-            case C.FILE_KEY:
-                resolved = config_dict.get(C.RESOLVED_FILE)
-            case C.PATH_KEY:
-                resolved = config_dict.get(C.RESOLVED_PATH)
-            case C.EXPORT:
-                export_field = config_dict.get(C.EXPORT)
-                if not export_field:
-                    logger.warning(f"Couldn't find export field in configuration {config}>{config_name}")
-                resolved = config_dict.get(export_field)
-        if resolve and resolved:
-            value = resolved
-        return value
+        config_dict = self._config_dict.get(config,{})
+        return U.get_config_element(config,config_name,
+                                    config_attribute,resolve,
+                                    config_dict)
 
     def get_pattern(self,name:str,**kwargs):
-        """ fille a given pattern with predefined / submitted params """
+        """ fill a given pattern with predefined / submitted params """
+
+        # check if we have configuration for py scripts
+        py_bat_name = self._get_config_element(C.CONFIGURATION_KEY,
+                                                C.CONFIGURATION_PY_BAT)
+        # for this check pattern name must be the same as given in configuration
+        is_py_bat = False
+        if py_bat_name == name:
+            is_py_bat = True
+
         pattern_configs = self._config_dict.get(C.PATTERN_KEY)
         if not pattern_configs:
             logger.info("no Config section [pattern] found")
@@ -630,55 +671,15 @@ class ConfigResolver():
                 has_quotes=re.findall(re_quotes,pattern)
                 if not has_quotes:
                     param_value='"'+param_value+'"'
+            # special case: for py_bat pattern replace dashes
+            if is_py_bat and param_name == C.PARAMS_KEY:
+                param_value = param_value.replace("_","-")
+                param_value = param_value.replace('"',"")
+                param_value = '"'+C.PARAMS_MARKER+param_value+C.PARAMS_MARKER+'"'
             params_dict[param_name]=param_value
 
         filled_pattern = ConfigResolver.get_filled_pattern(pattern,**params_dict)
         return filled_pattern
-
-    def _export_env_cmd(self,export_help:bool=True):
-        """ exports environment variables as batch file alongside with help """
-        pattern_help = "rem environment_win (_field_) [_help_]"
-        pattern = "set _key_=_value_"
-        dt_now = DateTime.now().strftime('%Y-%m-%d %H-%M-%S')
-        out_echo=[f"echo ### SETTING ENVIRONMENT (created {dt_now}) ###"]
-        out = ["@echo off",f"rem CREATED {dt_now} using cmd_client"]
-        config_env = C.key(C.CONFIG.ENVIRONMENT_WIN)
-        env_vars = self._config_dict.get(config_env)
-        if not env_vars:
-            logger.info(f"Couldn't get config type {env_vars}")
-            return
-        for env_var,env_info in env_vars.items():
-            export_field = env_info.get(C.EXPORT)
-            help_comment = env_info.get(C.HELP)
-            if not export_field:
-                continue
-            # use resolved path
-            match export_field:
-                case C.PATH_KEY:
-                    export_field = C.RESOLVED_PATH
-                case C.FILE_KEY:
-                    export_field = C.RESOLVED_FILE
-            value = env_info.get(export_field)
-            if not value:
-                continue
-            # wrap path / file in quotes
-            if export_field in [C.RESOLVED_PATH,C.RESOLVED_FILE]:
-                value = '"'+value+'"'
-            if help_comment:
-                out_line = pattern_help.replace("_field_",env_var)
-                out_line = out_line.replace("_help_",help_comment)
-                out.append(out_line)
-            out_line = pattern.replace("_key_",env_var)
-            out_line = out_line.replace("_value_",value)
-            logger.debug(f"Adding env [{env_var}]: {value}")
-            # add comment
-            out_echo_line = "echo "+out_line
-            if help_comment:
-                out_echo_line += " ("+help_comment+")"
-            out.append(out_line)
-            out_echo.append(out_echo_line)
-        out.extend(out_echo)
-        return out
 
 class CmdMap():
     """ Maps Input Parameters to Configuration Items """
@@ -742,7 +743,7 @@ if __name__ == "__main__":
     p = Path(__file__).parent
     p_config = str(p.joinpath("param_config.yaml"))
     config_dict = PersistenceHelper.read_yaml(p_config)
-    ch = ConfigResolver(config_dict)
+    ch = ConfigResolver(config_dict,ActionResolver())
 
     args = {"file":"<path to any local file>"}
     # testing the rendering of patterns

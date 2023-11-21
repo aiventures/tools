@@ -22,7 +22,7 @@ class CmdRunner():
 
     def run_cmd(self,os_cmd:str):
         """ runs command line command """        
-        logger.info(f"run command [{os_cmd}]")
+        logger.info(f"RUN COMMAND [{os_cmd}]")
         if not os_cmd:
             logger.warning("No command submitted, return")
             return
