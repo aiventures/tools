@@ -1,0 +1,99 @@
+@startuml
+'remark use together {...}left to right direction
+left to right direction
+'top to bottom direction
+skinparam dpi 180
+set namespaceSeparator none
+skinparam linetype ortho
+'skinparam linetype polyline
+<style>
+.moduleclass { BackgroundColor LightBlue }
+</style>
+
+'### MODULES
+together {
+'### MODULE my_package.module_external (69a1ade40fa5357b6c722c5af2e29388)
+package "my_package.module_external" as 69a1ade40fa5357b6c722c5af2e29388 <<module>> #TECHNOLOGY {
+class "my_package.module_external" as e4c16c1e9712dfc1ec759b255265e821 << (M,APPLICATION) moduleclass >> {
+        {field} {static} +logger: Logger
+}
+' # CLASS ExternalClass (2833e8af5a195cc59b300bccaacdd18e)
+    class "ExternalClass" as 2833e8af5a195cc59b300bccaacdd18e {
+        {field} {static} +externalclass_class_att1: str
+        {method} +external_instance_api_method()
+        {method} +external_instance_method()
+        {method} {static} +external_class_method()
+}
+}
+e4c16c1e9712dfc1ec759b255265e821 +-- 2833e8af5a195cc59b300bccaacdd18e
+
+'### MODULE my_package.module_myclass (b26ce2cc084f9bdc080f310ad4668cb9)
+package "my_package.module_myclass" as b26ce2cc084f9bdc080f310ad4668cb9 <<module>> #TECHNOLOGY {
+class "my_package.module_myclass" as 3c547bbf933e560be75f78a175f9dc23 << (M,APPLICATION) moduleclass >> {
+        {field} {static} +logger: Logger
+        {field} {static} +my_module_dict: dict
+        {field} {static} +my_module_var: str
+        {method} {static} +my_function(my_function_param:str): dict
+}
+' # CLASS MyClass01 (6573b34ebd9e018f0eddd2d587978665)
+    class "MyClass01" as 6573b34ebd9e018f0eddd2d587978665 {
+        {field} {static} +myclass_class_att1: str
+        {field} {static} +myclass_dict: dict
+        {field} {static} +myclass_ref_ext_class: ExternalClass
+        {method} +get_external(aFormatter:BufferingFormatter): str
+        {method} +get_external_api(param:str): str
+        {method} +myclass_instance_method(avar:int): dict
+        {method} {static} +myclass_method(class_meth_param:list): str
+}
+' # CLASS MySubClass (d04a4695b600acce3b4095238365788e)
+    class "MySubClass" as d04a4695b600acce3b4095238365788e {
+        {field} {static} +myclass_class_att1: str
+        {field} {static} +myclass_dict: dict
+        {field} {static} +myclass_ref_ext_class: ExternalClass
+        {field} {static} +myclass_subclass_att1: str
+        {method} +mysubclass_instance_method()
+        {method} {static} +get_external()
+        {method} {static} +get_external_api()
+        {method} {static} +myclass_instance_method()
+        {method} {static} +myclass_method()
+        {method} {static} +mysubclass_method(subclass_meth_param:list): str
+}
+}
+3c547bbf933e560be75f78a175f9dc23 +-- 6573b34ebd9e018f0eddd2d587978665
+3c547bbf933e560be75f78a175f9dc23 +-- d04a4695b600acce3b4095238365788e
+
+'### MODULE my_package.my_subpackage.my_submodule (f8cd9d115433f0b13b762cbfb210b01f)
+package "my_package.my_subpackage.my_submodule" as f8cd9d115433f0b13b762cbfb210b01f <<module>> #TECHNOLOGY {
+class "my_package.my_subpackage.my_submodule" as fa53c87d5669f64cbd78021ded302549 << (M,APPLICATION) moduleclass >> {
+
+}
+' # CLASS MySubModule (924a8b30353d5c3e5017ef5ca880c277)
+    class "MySubModule" as 924a8b30353d5c3e5017ef5ca880c277 {
+        {field} {static} +submoduleclass_class_att1: str
+        {method} +submodulemethod(s:str): str
+}
+}
+fa53c87d5669f64cbd78021ded302549 +-- 924a8b30353d5c3e5017ef5ca880c277
+
+}
+' (together ### MODULES)
+
+'### RELATED OBJECTS
+package "logging" as f1e28416100e498a3c1aeb9ed885ddd7 <<module>> {
+class "logging" <<module>> {
+{field} +logging_no_name
+}
+class "BufferingFormatter" as e6551ef1aa99ef99745772285f33a086
+}
+
+'### RELATIONS
+'# RELATION (0) [module-imports-module]: my_package.module_external - logging:logging:logging
+69a1ade40fa5357b6c722c5af2e29388 <.. f1e28416100e498a3c1aeb9ed885ddd7
+'# RELATION (4) [module-imports-module]: my_package.module_myclass - logging:logging:logging
+b26ce2cc084f9bdc080f310ad4668cb9 <.. f1e28416100e498a3c1aeb9ed885ddd7
+'# RELATION (3) [module-imports-class]: my_package.module_myclass - my_package:my_package.module_external:ExternalClass
+b26ce2cc084f9bdc080f310ad4668cb9 <.. 2833e8af5a195cc59b300bccaacdd18e
+'# RELATION (5) [None-inherits-class]: my_package:my_package.module_myclass:MyClass01 - my_package:my_package.module_myclass:MySubClass
+6573b34ebd9e018f0eddd2d587978665 <|-- d04a4695b600acce3b4095238365788e
+hide <<moduleclass>> stereotype
+@enduml

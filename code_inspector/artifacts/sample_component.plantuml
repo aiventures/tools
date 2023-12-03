@@ -1,0 +1,20 @@
+@startuml
+'remark use together {...}
+left to right direction
+'top to bottom direction
+skinparam dpi 180
+set namespaceSeparator none
+skinparam linetype ortho
+'skinparam linetype polyline
+<style>
+.moduleclass { BackgroundColor LightBlue }
+</style>
+package "my_package" {
+    [<<my_package>>\nmodule_external] as 69a1ade40fa5357b6c722c5af2e29388 #TECHNOLOGY
+    [<<my_package>>\nmodule_myclass] as b26ce2cc084f9bdc080f310ad4668cb9 #TECHNOLOGY
+package "my_package.my_subpackage" {
+    [<<my_package.my_subpackage>>\nmy_submodule] as f8cd9d115433f0b13b762cbfb210b01f #TECHNOLOGY
+}
+}
+hide <<moduleclass>> stereotype
+@enduml
