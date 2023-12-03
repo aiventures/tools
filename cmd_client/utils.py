@@ -85,6 +85,7 @@ class Utils():
         dt_now = DateTime.now().strftime('%Y-%m-%d %H-%M-%S')
         out_echo=[f"echo ### SETTING ENVIRONMENT (created {dt_now}) ###"]
         out = ["@echo off",f"rem CREATED {dt_now} using cmd_client"]
+        out.append("set display_vars=0")
         config_env = C.key(C.CONFIG.ENVIRONMENT_WIN)
         env_vars = config_dict.get(config_env)
         if not env_vars:
@@ -128,7 +129,9 @@ class Utils():
                 out_echo_line += " ("+help_comment+")"
             out.append(out_line)
             out_echo.append(out_echo_line)
+        out.append('if /I "%display_vars%" EQU "0" goto :end')
         out.extend(out_echo)
+        out.extend([":end","echo ### ENV VARIABLES SET"])
         return out
 
     @staticmethod
