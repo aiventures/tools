@@ -7,6 +7,7 @@ from enum import Enum
 CONFIG_REPORT = "config_report" # configuration report
 WIN_ENV_BAT = "win_env_bat" # Batch File to create environment vars
 PARAMS_MARKER = "@p@" # Marker to enclose input parameters for py_bat
+PARAM_EXTRA = "extra" # extra parameter that will be stripped of its parameters
 
 class CONFIG(Enum):
     """ CONFIG FILE MAIN CATEGORIES DEFINITION  """

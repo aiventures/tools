@@ -1,6 +1,8 @@
 @echo off
 rem activate local venv and start python program and pass all arguments 
-call set_env_local.bat
-echo activate venv (Path %venv_work%)
-call %venv_work%
+rem env.bat can be created using the command line client, see runner.py
+call env.bat
+echo ### activate venv (Path %p_venv_default%)
+call %p_venv_default%\activate.bat
+echo ### RUN COMMAND [python %*]
 python %*

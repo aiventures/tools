@@ -93,8 +93,8 @@ class Runner():
             logger.info(f"*  [{action}]: {action_info}")
         logger.info("### COMMANDS")
         for cmd,cmd_info in cmd_dict.items():
-            logger.info(f"*  [{cmd}]: {cmd_info}")   
-    
+            logger.info(f"*  [{cmd}]: {cmd_info}")
+
     def transform_cmds(self,cmd_list):
         """ transforms the params for passing over to py_bat """
         out_list = []
@@ -108,12 +108,13 @@ class Runner():
     def run_cmd(self,parsed_args,open_files:bool=False)->str:
         """ returns the os command """
         commands = self._config.get_cmd(parsed_args)
+        sub_command = parsed_args.get(C.COMMAND,"MAIN COMMAND")
         cmd_dict = commands.get(C.PATTERN_KEY)
         action_dict = commands.get(C.ACTION_KEY,{})
         # move actions to action resolver
         if action_dict:
             num_actions = len(action_dict)
-            logger.info(f"Retrieved ({num_actions}) Actions {list(action_dict.keys())}")
+            logger.info(f"Command [{sub_command}]: Retrieved ({num_actions}) Actions {list(action_dict.values())}")
             action_dict = self._config.run_actions(action_dict,**parsed_args)
         else:
             logger.info("No actions")
@@ -122,11 +123,11 @@ class Runner():
         if cmd_dict:
             num_cmds = len(cmd_dict)
             cmds = list(cmd_dict.values())
-            logger.info(f"Retrieved ({num_cmds}) Commands {list(cmd_dict.keys())}")
+            logger.info(f"Command [{sub_command}]: ({num_cmds}) Commands {list(cmd_dict.values())}")
             cmds = self.transform_cmds(cmds)
         else:
             logger.info("No commands Derived (actions were done before)")
-        
+
         self.log_results(action_dict,cmd_dict)
 
         open_files = self._config.configuration.get(C.CONFIGURATION_OPEN_FILES,False)
@@ -157,17 +158,22 @@ if __name__ == "__main__":
     CMD_TOTALCMD2 = 'tc ' # testing total commander with default
     CMD_DIFF = "diff -of f_test -nf f_test_new --path cwd" # VSCODE diff tool
     CMD_MERGE = "merge -lf f_test_new -rf f_test_different -bf f_test -tf f_test_merged" # VSCODE merge tool
-    CMD_PY = 'py -m py_argparse_test -pp "__test xyz _p"' # check python launcher
+    CMD_PY = 'py -m py_argparse_test -pp "__test xyz _p"' # check python launcher dashes in command need to be replaced by underscores
+    CMD_PUML = "puml -f f_plantuml" # create plantuml
+    CMD_TEST_EXTRA = 'npp -x "some extra params -s"'
+    CMD_PY2 = 'py -m py_argparse_test -x "--test xyz -p"' # check python launcher with different quotes
+    CMD1 = 'run -cm "python" -f "a file" -p path -x "-some -params"' # generic command
+    CMD2 = 'run -cm "python" -x "--version"'
+    # based on generic command prepopulate command with python
 
-    # TODO Pyhton
-    # TODO PlantUml
+    # TODO Python
     # Todo Markdown
 
     f_config = CONFIG_PATH
     #  pass over configuration file
-    if len(sys.argv) <= 1:        
+    if len(sys.argv) <= 1:
         # use one of the sample configs above
-        test_cmd = CMD_CREATE_ENV_BAT
+        test_cmd = CMD_EXPORT_ENV
     else:
         print(f"RUNNING FROM COMMAND LINE (CONFIG FILE: {f_config})")
         test_cmd = None
@@ -189,7 +195,7 @@ if __name__ == "__main__":
     # show config in log
     logger.info(f"\n## Parser Configuration:\n {json.dumps(runner.config.configuration, indent=4)}")
     logger.info(f"\n## Config:\n {json.dumps(parsed_args, indent=4)}")
-    logger.info(f"## Work Dir: {os.getcwd()}")
+    logger.info(f"## Work Dir: [{os.getcwd()}]")
 
     if True or not test_cmd:
         cmd = runner.run_cmd(parsed_args)

@@ -1,6 +1,6 @@
 @echo off
 rem help file
-echo ### HELP
+echo ### HELP (bat files in /tools/bat)
 echo * code_inspector [path]    create plantuml for current dir, or [path]
 echo * plantuml [file]          create plantuml from [file], or from all plantuml in current dir
 echo * set_env_local,           setting local variables (use set_env_template as template)

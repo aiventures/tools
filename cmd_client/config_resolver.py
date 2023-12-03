@@ -68,7 +68,12 @@ class ConfigResolver():
                 out = out.replace(placeholder,placeholder_out[1:-1])
             else:
                 out = out.replace(placeholder,"")
-        return out.strip()
+
+        # strip double spaces
+        out = out.strip()
+        while '  ' in out:
+            out = out.replace('  ', ' ')
+        return out
 
     def get_config_types(self)->list:
         """ get validated available config types as validated Enum Keys"""
@@ -143,18 +148,19 @@ class ConfigResolver():
     def _validated_file(self,file:str,path:str)->str:
         """ resolves file information and returns absolute path None if invalid"""
         out_file = None
-        # file path is already resolved
-        if file and os.path.isfile(file):
-            out_file = os.path.abspath(file)
-        # path is given
-        elif path is not None and file is not None and os.path.isdir(path):
+        # path is given and file is given
+        if path is not None and file is not None and os.path.isdir(path):
             file_abs = os.path.join(path,file)
             out_file = os.path.abspath(file_abs)
+            # issue a warning but pass it over nonetheless
             if not os.path.isfile(file_abs):
                 logger.warning(f"Validated File {out_file} does not exist")
         # no path is given, try to get from dereferencing file
         elif file is not None and path is None:
             out_file = self._get_config_element(C.FILE_KEY,file,C.RESOLVED_FILE)
+        # file path is already resolved
+        elif file and os.path.isfile(file):
+            out_file = os.path.abspath(file)
 
         return out_file
 
@@ -175,7 +181,7 @@ class ConfigResolver():
             file_resolved = file_config.get(file_key,{}).get(C.RESOLVED_FILE)
         else:
             file_resolved = file_key
-        if not os.path.isfile(exec_key):            
+        if not os.path.isfile(exec_key):
             exec_resolved = exec_config.get(exec_key,{}).get(C.RESOLVED_FILE)
         else:
             exec_resolved = exec_key
@@ -339,6 +345,10 @@ class ConfigResolver():
             return params_dict
         for key,pattern_info in pattern_dict_params.items():
             value = params_dict.get(key)
+            # special case: extra param, strip from quotes
+            if value and key == C.PARAM_EXTRA:
+                value = value.strip('\"')
+                logger.debug(f"extra parameter, strip quotes: [{value}]")
             if not value:
                 logger.debug(f"Pattern {pattern_key}, Param {key}, no value found")
                 continue
@@ -666,11 +676,11 @@ class ConfigResolver():
             # wrap os objects in quotes
             if is_file_type:
                 # wrap in quotes, do not do this in case we already have quotes in the pattern
-                logger.debug(f"Adding quotes for param {param_name} (file type)")
+                logger.debug(f"Adding quotes for param {param_name} (file type), value [{param_value}]")
                 re_quotes=r"\"{\["+param_name
                 has_quotes=re.findall(re_quotes,pattern)
                 if not has_quotes:
-                    param_value='"'+param_value+'"'
+                    param_value='"'+param_value.strip('\"')+'"'
             # special case: for py_bat pattern replace dashes
             if is_py_bat and param_name == C.PARAMS_KEY:
                 param_value = param_value.replace("_","-")

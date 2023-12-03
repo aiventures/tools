@@ -50,5 +50,5 @@ cc_report.md
 cmd_client/validation_report.md
 cmd_client/test.md
 cmd_client/test_config.yaml
-bat/c.bat
 bat/env.bat
+cmd_client/config.md

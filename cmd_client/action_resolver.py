@@ -45,7 +45,7 @@ class ActionResolverMain():
 
     def resolve_action(self,action,action_info:dict)->dict:
         """ resolve specific actions, this is the entry method called from config_resolver """
-        # this treats hard coded actions, implement your own in Action Class
+        # this treats hard coded actions, Fimplement your own in Action Class
         match action:
             case C.ACTION_CREATE_REPORT:
                 return {action:ActionResolver._resolve_ref(C.CONFIG_REPORT,action_info)}
@@ -56,6 +56,7 @@ class ActionResolverMain():
 
 class ActionResolver(ActionResolverMain):
     """ exit class to allow for custom actions (is called from config_resolver) """
+    # example param
     ACTION_PARAM = "action_param" # this is defined in cmd_map>cmd_client_main>map>param_action
 
     """ this class can be enhanced for additional actions (will be called from config_resolver) """

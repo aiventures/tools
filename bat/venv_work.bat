@@ -1,5 +1,8 @@
 @echo off
 rem activate venv
-call set_env_local.bat
-echo activate venv (Path %venv_work%)
-call %venv_work%
+set cwd=%CD%
+call env.bat
+echo activate venv (Path %p_venv_default%)
+cd %venv_work%
+call activate.bat
+cd %cwd%

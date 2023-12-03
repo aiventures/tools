@@ -2,9 +2,11 @@
 rem open plantuml with options
 rem way too complicated
 rem activate venv
-call set_env_local.bat
-call venv_work.bat
-echo #### RUN Code Inspector (%code_inspector%)
+call env.bat
+echo ### activate venv (Path %p_venv_default%)
+call %p_venv_default%\activate.bat
+
+echo #### RUN Code Inspector (%py_code_inspector%)
 setlocal
 rem memorize current workdir 
 set cwd=%CD%
@@ -47,7 +49,7 @@ set params=-h
 :continue
 echo CALL CODE INSPECTOR
 echo code_inspector %params% (Path %CD%)
-python "%code_inspector%" %params%
+python %py_code_inspector% %params%
 echo switching back to path %cwd%, done 
 cd %cwd%
 
