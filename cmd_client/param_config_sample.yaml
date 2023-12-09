@@ -5,8 +5,8 @@
 # (for example dropping opening at line commands when no line is submitted)
 # you may need to adjust the sample to real files / paths on your computer
 # check out all locations with the marker <PATH_TO>
-# It is recommended to start with filling file paths and file locations and 
-# continue from there 
+# It is recommended to start with filling file paths and file locations and
+# continue from there
 pattern:
   notepadpp:
     pattern: "{[notepadpp]} {[file]} {-n[line]} {[extra]}"
@@ -25,7 +25,7 @@ pattern:
         help: "Additional params (in quotes) to be appended to command"
     help: "Opens Notepad++: [notepadpp] -n[line] [extra]"
   vscode:
-    pattern: '{[vscode]} --goto "{[file]}{:[line]}" {[path]} {[extra]}'
+    pattern: '{[vscode]} {--goto "[file]"}{:[line]} {[workspace]} {[path]} {[extra]}'
     param:
       vscode:
         type: executable # use to check
@@ -36,13 +36,16 @@ pattern:
       line:
         type: param
         help: "File to be opened at line number"
+      workspace:
+        type: file
+        help: "Path to a workspace file"
       path:
         type: path
         help: "Path to be opened (in navigation window)"
       extra:
         type: param
         help: "Additional params (in quotes) to be appended to command"
-    help: "Opens VSCODE: [vscode] [file] at [line] in path [path] with [extra]"
+    help: "Opens VSCODE: [vscode] [file] (or [workspace]) at [line] in path [path] with [extra]"
   vscode_diff:
     pattern: "{[vscode]} --diff {[oldfile]} {[newfile]} {[path]} {[extra]}"
     param:
@@ -200,7 +203,7 @@ executable:
   py_bat:
     file: py.bat
     path: p_bat
-    help: "Command line wrapper for starting python programs"   
+    help: "Command line wrapper for starting python programs"
   py_cmd_client:
     file: runner.py
     path: p_cmd_client
@@ -520,6 +523,12 @@ cmd_param:
       default: cwd
       help: "Path to be opened"
       metavar: "[path]"
+    workspace:
+      param_short: ws
+      param: workspace
+      default: null
+      help: "Path to a workspace file"
+      metavar: "[workspace]"
     extra:
       param_short: x
       param: extra
