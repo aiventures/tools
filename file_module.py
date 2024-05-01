@@ -115,7 +115,7 @@ def save_json(filepath,data:dict):
             logger.error("Exception writing file {filepath}",exc_info=True)
 
         return None
-    
+
 def save_yaml(filepath,data:dict):
     """ Saves dictionary data as UTF8 yaml"""
     # TODO encode date time and other objects in dict see
@@ -126,7 +126,9 @@ def save_yaml(filepath,data:dict):
             yaml.dump(data,yaml_file,default_flow_style=False)
         except:
             logger.error(f"Exception writing file {filepath}",exc_info=True)
-        return None    
+        return None
+
+
 
 def md2toc(f:str,as_string:bool=True):
     """ reads contents of a markdown file, extracts header lines to table of contents
@@ -146,10 +148,10 @@ def md2toc(f:str,as_string:bool=True):
             level=len(match[0][0])
             label=match[0][1].strip()
             link_text = re.findall(REGEX_LINK,label)
-            if link_text:            
+            if link_text:
                 label = link_text[0]
-            
-            # replace special characters 
+
+            # replace special characters
             link=re.sub(RE_SPECIAL_CHARS,"",label)
             link=link.replace(" ","-").lower()
             anchor_link=MD_ANCHOR.replace("_LABEL_",label)
@@ -245,20 +247,51 @@ def print_file_info(file_info_dict):
                         logger.debug(str(content).encode('utf-8').decode('ascii','ignore'))
     return None
 
+def render_lines_as_table(lines:list=None,contains_title:bool=True,separator:str="\t",table_sep:str="|",
+                          title_line_separator:str="---",title_col_separator:str="|")->list:
+    """ renders strings as tables  """
+
+    def get_table_line(line_str,sep:str=separator,table_sep:str=table_sep):
+        values = line_str.split(separator)
+        values =  [v.strip() for v in values]
+        return table_sep+table_sep.join(values)+table_sep
+
+    out = []
+    if contains_title:
+        _lines = lines[1:]
+        column_titles=lines[0].split(separator)        
+        out.append(get_table_line(lines[0],table_sep=title_col_separator))
+        if title_line_separator:
+            n=len(column_titles)
+            # markdown syntax
+            title_line_str=n*(title_col_separator+title_line_separator)+title_col_separator
+            out.append(title_line_str)
+    else:
+        _lines = lines
+        column_titles=[]
+    for line in _lines:
+        out.append(get_table_line(line,sep=separator,table_sep=table_sep))
+    return out
+
+test_lines=["A sdfjhsgd kjjksdgh kjshdg \tB\tC","1\t2\t3","4\t5\t6"]
+
 def test():
     """ Spielwiese """
-    s = r"safkjh ; asfh/faj af\kj)ha(fs j"
-    print(s)
-    # regex for special characters
-    re_char = "[\\\;:().,;/]"
-    result = re.findall(re_char,s)
-    result2 = re.sub(re_char,"",s)
-    result2 = result2.replace(" ","-")
+    # s = r"safkjh ; asfh/faj af\kj)ha(fs j"
+    # print(s)
+    # # regex for special characters
+    # re_char = "[\\\;:().,;/]"
+    # result = re.findall(re_char,s)
+    # result2 = re.sub(re_char,"",s)
+    # result2 = result2.replace(" ","-")
+    rendered_lines = render_lines_as_table(test_lines,title_col_separator="||",title_line_separator=None)
+    print("\n".join(rendered_lines))
+
     pass
-                    
+
 
 if __name__ == "__main__":
     loglevel = logging.INFO
     logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
-                        level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")    
+                        level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
     test()

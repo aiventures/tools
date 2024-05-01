@@ -95,6 +95,7 @@ def get_replace_dict(f_img:str,f_gpx:str,time_gps:str=None,tz:str="Europe/Berlin
     dt_camera_s=dt_camera_s[0]
     datetime_camera=convert_datetime_string(dt_camera_s,tz)
 
+
     # get gps date time if time string is given, otherwise use gps datetime from camera
     if time_gps:
         dt_gps_s = " ".join([dt_camera_s.split(" ")[0],time_gps])
@@ -107,9 +108,9 @@ def get_replace_dict(f_img:str,f_gpx:str,time_gps:str=None,tz:str="Europe/Berlin
     ts_cam=datetime_camera[TIMESTAMP]
     dt=ts_gps-ts_cam
     s=f"\n{tz}, DATE {datetime_camera[LOCAL]:%Y.%m.%d}, "
-    s+=f"CAMERA ({datetime_camera[LOCAL]:%H:%M:%S})"
-    s+=f", GPS ({datetime_gps[LOCAL]:%H:%M:%S})"
-    s+=f", OFFSET {dt}s"
+    s+=f"\nCAMERA ({datetime_camera[LOCAL]:%H:%M:%S})"
+    s+=f"\nGPS    ({datetime_gps[LOCAL]:%H:%M:%S})"
+    s+=f"\nOFFSET {dt}s"
     print(s)
 
     # get nearest GPS waypoint
