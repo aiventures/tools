@@ -20,7 +20,10 @@
 """
 
 import sys
+import logging
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 ESC='\033'
 COL_BG="[48;5;_NUM_m"
@@ -178,6 +181,7 @@ class COL_DESC(Enum):
 
 def print_colors():
     """Printing all colors"""
+    logger.debug("start")
     color_out=[]
     for col in COLOR:
         color_out.append(f"{col.value}{col.name:<15}"+COL.STD.value)
@@ -208,6 +212,7 @@ def get_col_str(color, is_background:bool=False):
         if color is an int, return the corresponding color code
         (optionally as background color)
     """
+    logger.debug("start")    
     if color is None:
         return ""
     if isinstance(color, int):
@@ -238,6 +243,7 @@ def get_col_str(color, is_background:bool=False):
 
 def col(text:str,col=None,col_bg=None):
     """ colorize a string """
+    logger.debug("start")    
     _cols = get_col_str(col)
     if isinstance(_cols,tuple):
         _col = _cols[0]
@@ -253,6 +259,7 @@ def col(text:str,col=None,col_bg=None):
 
 def print_color_tones():
     """ Display all colors in console  """
+    logger.debug("start")    
     num0 = 16
     for c_type in ["38","48"]:
         hdr = col(f"\n COLOR CODE: ESC + [{c_type};5; (n)m", "C_YLL")
@@ -279,6 +286,7 @@ def print_color_tones():
 
 def print_custom_colors():
     """ prints custom colors defined in """
+    logger.debug("start")    
     print(col("\n### CUSTOM COLORS IN ENUM COL\n", "C_T"))
     for cust_color in COL_DESC:
         cust_col_name = cust_color.name
@@ -287,6 +295,7 @@ def print_custom_colors():
 
 def print_color_constants():
     """ prints custom colors """
+    logger.debug("start")    
     print(col("\n### CUSTOM COLOR CONSTANTS\n", "C_T"))
     # get all constant values
     col_list = [_col for _col in dir(sys.modules[__name__]) if (_col).startswith("COL_")]
@@ -300,6 +309,10 @@ def print_color_constants():
         print(col(s,COL_BLACK,col_value))
 
 if __name__ == '__main__':
+    loglevel = logging.INFO
+    logging.basicConfig(format='%(asctime)s %(levelname)s %(module)s:[%(name)s.%(funcName)s(%(lineno)d)]: %(message)s',
+                        level=loglevel, stream=sys.stdout, datefmt="%Y-%m-%d %H:%M:%S")
+
     print(col("\n### COLOR CONSTANTS","C_T"))
     print_color_constants()
     print(col("\n### STANDARD COLORS","C_T"))
