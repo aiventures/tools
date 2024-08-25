@@ -3,6 +3,7 @@
 
 import sys
 import os
+import re
 # when doing tests add this to reference python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import logging
@@ -29,7 +30,6 @@ CYGPATH_UNC2DOS = "u2d"
 # param definitions
 P_CONV_PATH = "path"
 P_CONV_CONF = "conv"
-
 
 logger = logging.getLogger(__name__)
 config = ConfigEnv(F_CONFIG_ENV)

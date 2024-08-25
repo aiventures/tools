@@ -5,6 +5,12 @@ from pathlib import Path
 import logging
 from datetime import datetime as DateTime
 import json
+
+# when doing tests add this to reference python path
+if __name__ == "__main__":
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from util import constants as C    
+
 # exclude yaml handling here to avoid import of required libs
 # import yaml
 # from yaml import CLoader
@@ -293,14 +299,17 @@ class Persistence():
         return out
 
     @staticmethod
-    def read_txt_file(filepath,encoding='utf-8',comment_marker="# ",skip_blank_lines=True,strip_lines=True)->list:
-        """ reads data as lines from file
+    def read_txt_file(filepath,encoding='utf-8',comment_marker="# ",skip_blank_lines=True,strip_lines=True,with_line_nums:bool=False)->list:
+        """ reads data as lines from file, optionally as dict with line numbers
         """
-        lines = []
+        if with_line_nums:
+            lines = {}
+        else:
+            lines = []
         bom_check = False
         try:
             with open(filepath,encoding=encoding,errors='backslashreplace') as fp:
-                for line in fp:
+                for n,line in enumerate(fp):
                     if not bom_check:
                         bom_check = True
                         if line[0] == BOM:
@@ -312,7 +321,10 @@ class Persistence():
                         continue
                     if strip_lines:
                         line = line.strip()
-                    lines.append(line)
+                    if with_line_nums: 
+                        lines[n] = line
+                    else:
+                        lines.append(line)
         except:
             logger.error(f"Exception reading file {filepath}",exc_info=True)
         return lines
