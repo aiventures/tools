@@ -2,7 +2,10 @@
 rem activate venv
 set cwd=%CD%
 call env.bat
+IF DEFINED VIRTUAL_ENV (goto end) ELSE (goto activate_venv)
+:activate_venv
 echo activate venv (Path %p_venv_default%)
-cd %venv_work%
+cd %p_venv_default%
 call activate.bat
 cd %cwd%
+:end

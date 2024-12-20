@@ -1,15 +1,18 @@
 @echo off
-rem colors.bat: Sets specific color codes as ENV C... (check using C_set C_), also see colors.py
-ren https://en.wikipedia.org/wiki/ANSI_escape_code
+
+rem colors.bat: Sets specific color codes as ENV C... check using C_set C_, also see colors.py
+rem https://en.wikipedia.org/wiki/ANSI_escape_code
 rem https://ss64.com/nt/syntax-ansi.html
 rem https://stackoverflow.com/questions/2048509/how-to-echo-with-different-colors-in-the-windows-command-line 
 rem https://gist.github.com/mlocati/fdabcaeb8071d5c75a2d51712db24011#file-win10colors-cmd
-rem define a newline variable (spaces need to be kept)
+rem define a newline variable spaces need to be kept
 rem https://stackoverflow.com/questions/132799/how-can-i-echo-a-newline-in-a-batch-file
 
 rem create an ESQ Sequence
-for /F %%a in ('echo prompt $E ^ cmd") do set "ESC=%%a"
-rem selected color palette (38 is foreground, 48 is background), use py_color_list.bat to display the pytho
+for /F %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
+rem selected color palette 38 is foreground, 48 is background, use py_color_list.bat to display the python
+
+set COL_TEST=%ESC%[38;2;229,229;229m
 set COL_GREEN_DARK=%ESC%[38;5;34m 
 set COL_GREEN=%ESC%[38;5;40m
 set COL_GREEN_LIGHT=%ESC%[38;5;46m

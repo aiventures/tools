@@ -2,6 +2,7 @@
 
 import sys
 from copy import deepcopy
+from pathlib import Path
 import os
 import re
 import uuid
@@ -28,10 +29,12 @@ APPLY_ALL = C.APPLY_ALL
 
 class StringMatcher():
     """ bundling sets of rules to perform rule matching on strings """
-    def __init__(self,rules:list=None,apply:str=APPLY_ALL) -> None:
+    def __init__(self,rules:list=None,apply_default:str=APPLY_ALL) -> None:
         self._rules = {}
+        # 'all' rules that need match
+        self._all_rules = []
         # apply all or any rules
-        self._apply = apply
+        self._apply_default = apply_default
         self.add_rules(rules)
 
     def add_rules(self,rules:list)->None:
@@ -43,9 +46,22 @@ class StringMatcher():
         for _rule in rules:
             self.add_rule(_rule)
 
+    @property
+    def rules(self):
+        """ getter method for rules """
+        return self._rules
+
     def clear(self)->None:
         """ reset list of rules """
         self._rules = {}
+
+    def _add_all_rules(self):
+        """ updates the all rules list """
+        self._all_rules = []
+        for _rule,_rule_info in self._rules.items():
+            if _rule_info.get(C.RULE_APPLY,self._apply_default) == C.APPLY_ALL:
+                self._all_rules.append(_rule)
+        logger.debug(f"ALL_RULES: {self._all_rules}")
 
     def add_rule(self,rule:dict)->None:
         """ validates and adds rule """
@@ -66,7 +82,7 @@ class StringMatcher():
 
         # step 1 copy default values
         _rule = deepcopy(RULEDICT)
-        # 2step 2 copy all other values from original dict       
+        # 2step 2 copy all other values from original dict
         _rule = {key: value for (key, value) in rule.items()}
 
         # add regex
@@ -81,14 +97,18 @@ class StringMatcher():
         except (TypeError,KeyError) as e:
             logger.warning(f"Rule [{rule[RULE_NAME]}], no regex expression [{rule[RULE_RULE]}] was supplied, {e}")
 
+        self._add_all_rules()
+
     def find(self,s:str,rule:str)->list:
-        """ looks for string using rule, returns found string as list """
+        """ looks for string using rule, returns found string as list
+        """
         _rule_dict = self._rules.get(rule)
         if _rule_dict is None:
             logger.warning(f"There is no matching rule named [{rule}]")
             return False
 
         _regex = _rule_dict[RULE_REGEX]
+        _include_results = _rule_dict.get(C.RULE_INCLUDE,True)
         # either match using regex or simple rule
         if _regex is None:
             _rule = _rule_dict[RULE_RULE]
@@ -96,32 +116,81 @@ class StringMatcher():
                 _s = s.lower()
             else:
                 _s = s
-            if _rule in _s:
-                return [_rule]
+            # include or excclude results
+            # include results / regular approach
+            if _include_results is True:
+                if _rule in _s:
+                    return [_rule]
+                else:
+                    return []
+            #exclude results: Invert results
             else:
-                return []
+                # it was found but excluded / return empty list
+                if _rule in _s:
+                    return []
+                # excluded, not found => _rule applies
+                else:
+                    return [_rule]
         else:
             _regex = _rule_dict[RULE_REGEX]
             _matches = _regex.findall(s)
-            return _matches
+            if _include_results is True:
+                return _matches
+            # excluding results
+            else:
+                # if result is empty, then excluding negates it, return original string
+                if len(_matches) == 0:
+                    return [s]
+                # there were matching results, exclude this
+                else:
+                    return []
 
-    def find_all(self,s:str,by_rule:bool=True):
+    def _filter_result_set(self,result_set:dict)->dict:
+        """ check the result rules combinations """
+
+        # create the list of rule that must apply
+        if len(self._all_rules) == 0:
+            return result_set
+
+        # if there is a single all rule that is not contained in
+        # result set, then drop the whole aply_all result set
+        drop_all_rule_set = False
+        for all_rule in self._all_rules:
+            if result_set.get(all_rule) is None:
+                drop_all_rule_set = True
+                break
+
+        if drop_all_rule_set is True:
+            for _all_rule in self._all_rules:
+                _ = result_set.pop(_all_rule)
+
+        return result_set
+
+    def find_all(self,s:str,by_rule:bool=True,filter_result_set:bool=True)->dict|list:
         """ returns matches.
             returns found results as dict by rule
             or as list
             by_rule: control parameter whether results are grouped by rule
+            filter_result_set: Check the all rules
         """
-        found_results = {}
+        _found_results = {}
         for _rule_name in self._rules.keys():
-            found_results[_rule_name] = self.find(s,_rule_name)
+            # get the apply mode from rules or from default
+            _apply = self._rules.get(_rule_name,{}).get(C.RULE_APPLY,self._apply_default)
+            _results = self.find(s,_rule_name)
+            if len(_results) > 0:
+                _found_results[_rule_name]={C.RULE_RESULTS:_results,C.RULE_APPLY:_apply}
+
+        if filter_result_set:
+            self._filter_result_set(_found_results)
 
         if by_rule is False:
-            _results = list(found_results.values())
-            found_results = []
-            _ = [found_results.extend(_result) for _result in _results]
-            found_results = list(set(found_results))
+            _results = list(_found_results.values())
+            _found_results = []
+            _ = [_found_results.extend(_result) for _result in _results]
+            _found_results = list(set(_found_results))
 
-        return found_results
+        return _found_results
 
     def matches_rule(self,s:str,rule:str)->bool:
         """ check for matching rule """
@@ -136,10 +205,59 @@ class StringMatcher():
         if len(_rule_matches) == 0:
             return False
         _matches = list(_rule_matches.values())
-        if self._apply == APPLY_ALL:
+        if self._apply_default == APPLY_ALL:
             return all(_matches)
         else:
             return any(_matches)
+
+class FileMatcher(StringMatcher):
+    """ Applies search to file contents """
+    def __init__(self, rules: list = None, apply: str = APPLY_ALL, by_line_default:bool=True) -> None:
+        """ constructor, same as String Matcher additional params
+            by_line_default: search in line only (True) or in complete texte (False)
+         """
+        super().__init__(rules, apply)
+        self._by_line_default = by_line_default
+        self._content = {}
+
+    # def _read_file_content(self,f:str) -> str:
+    #     """ interpretes string as string and returns file content """
+    #     _file = Path(f).absolute()
+    #     _suffix = _file.suffix[1:]
+    #     self._content = {}
+    #     if not _file.is_file():
+    #         logger.warning(f"File Path [{_file}] is not valid, check")
+    #         return
+    #     if not _file.suffix[1:] in C.FILETYPES_SUPPORTED:
+    #         logger.warning(f"File [{f}] has no supported suffix {C.FILETYPES_SUPPORTED}")
+    #         return
+    #     _content = _file.read_text(encoding="UTF-8")
+    #     logger.debug(f"Reading File [{f}], Length [{len(_content)}]")
+    #     # stor file content
+    #     self._content[f] = _content
+    #     return _content
+
+    # def find(self,s:str,rule:str)->dict:
+    #     """ searches in file, returns occurence in file """
+    #     logger.debug(f"Find Occurences for Rule [{rule}] in file [{s}]")
+    #     _file_content = self._read_file_content(s)
+    #     if _file_content is None:
+    #         return {}
+    #     # also check whether rule has a specific by_line rule
+    #     _by_line =  self._rules.get(rule,{}).get(C.RULE_FIND_BY_LINE)
+    #     if not isinstance(_by_line,bool):
+    #         _by_line = self._by_line_default
+
+    #     if _by_line is True:
+    #         _lines = _file_content.split("\n")
+    #     else:
+    #         _lines = [_file_content]
+    #     _search_results = {}
+    #     # now do the search
+    #     for num,_line in enumerate(_lines):
+    #         matches = super().find(_line,rule)
+    #         _search_results[num] = matches
+    #     return _search_results
 
 def _test():
     s = "Lorem ipsum odor amet, consectetuer adipiscing elit. Consectetur rhoncus lorem maximus magnis nisl; elit phasellus vel. Etiam ullam"

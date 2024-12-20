@@ -136,6 +136,13 @@ class Persistence():
                 d[k] = v
         return d
 
+    def read_file(self,encoding='utf-8',comment_marker=None,skip_blank_lines=False,strip_lines=True,with_line_nums:bool=False)->list|dict:
+        """ read file and return content"""
+        if self._f_read is None:
+            logger.warning("No valid filee")
+            return
+        return Persistence.read_txt_file(self._f_read,encoding,comment_marker,skip_blank_lines,strip_lines,with_line_nums)
+
     @staticmethod
     def get_headerdict_template(keys:list,attribute_dict:dict):
         """ creates a headerdict template from keys and attributes """
